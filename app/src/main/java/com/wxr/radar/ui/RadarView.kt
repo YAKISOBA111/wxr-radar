@@ -210,14 +210,13 @@ class RadarView @JvmOverloads constructor(
         canvas.translate(-cx, -ownY)
 
         val bounds = data.bounds
-        val kmPerDeg = 111.0f
+        val kmPerDeg = 111.0
+        val cosLat   = cos(Math.toRadians(ownship.lat))
         val latSpan  = ((bounds.latMax - bounds.latMin) * kmPerDeg).toFloat()
-        val lonSpan  = ((bounds.lonMax - bounds.lonMin) * kmPerDeg *
-                        cos(Math.toRadians(ownship.lat)).toFloat())
+        val lonSpan  = ((bounds.lonMax - bounds.lonMin) * kmPerDeg * cosLat).toFloat()
         val dw = lonSpan * pxPerKm
         val dh = latSpan * pxPerKm
-        val ox = ((ownship.lon - bounds.lonMin) * kmPerDeg *
-                  cos(Math.toRadians(ownship.lat))).toFloat() * pxPerKm
+        val ox = ((ownship.lon - bounds.lonMin) * kmPerDeg * cosLat).toFloat() * pxPerKm
         val oy = ((bounds.latMax - ownship.lat) * kmPerDeg).toFloat() * pxPerKm
 
         val dest = RectF(cx - ox, ownY - oy, cx - ox + dw, ownY - oy + dh)

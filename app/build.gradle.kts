@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.gson)
     implementation(libs.constraintlayout)
+    implementation(libs.play.location)
 
     // Android Auto / Automotive
     // implementation(libs.car.app)  // TODO: re-enable after basic build passes
