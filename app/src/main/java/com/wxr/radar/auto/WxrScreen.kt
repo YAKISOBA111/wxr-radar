@@ -17,6 +17,18 @@ import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.location.Location
+import android.os.Looper
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.wxr.radar.data.HeadingSource
 import com.wxr.radar.data.JmaRepository
 import com.wxr.radar.data.NdMode
 import com.wxr.radar.data.NdOrient
@@ -58,6 +70,33 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
     private var surfaceContainer: SurfaceContainer? = null
     private var sweepAngle = 0f
 
+    // GPS
+    private val fusedClient =
+        LocationServices.getFusedLocationProviderClient(carContext)
+    private var firstFixDone = false
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            val loc = result.lastLocation ?: return
+            val speedKmh = (loc.speed * 3.6f).coerceAtLeast(0f)
+            // GPS速度>3km/h かつ bearing有効ならGPS方位、それ以外は前回方位を維持
+            val heading = if (speedKmh > 3f && loc.hasBearing()) loc.bearing else ownship.headingDeg
+            val source  = if (speedKmh > 3f && loc.hasBearing()) HeadingSource.GPS else ownship.headingSource
+            ownship = ownship.copy(
+                lat = loc.latitude,
+                lon = loc.longitude,
+                headingDeg = heading,
+                speedKmh = speedKmh,
+                headingSource = source
+            )
+            // 初回の位置確定後に実際の現在地でレーダーを取得
+            if (!firstFixDone) {
+                firstFixDone = true
+                startFetch()
+            }
+            renderToSurface()
+        }
+    }
+
     // スイープアニメーション
     private val sweepJob = scope.launch {
         while (isActive) {
@@ -79,12 +118,27 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
 
     init {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(surfaceCallback)
-        // Screen破棄時にコルーチンをキャンセル
+        startLocationUpdates()
+        // Screen破棄時にコルーチンとGPSをクリーンアップ
         lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
             override fun onDestroy(owner: androidx.lifecycle.LifecycleOwner) {
                 scope.cancel()
+                fusedClient.removeLocationUpdates(locationCallback)
             }
         })
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        val fine = Manifest.permission.ACCESS_FINE_LOCATION
+        if (ContextCompat.checkSelfPermission(carContext, fine) != PackageManager.PERMISSION_GRANTED) {
+            // Auto環境では権限はスマホ側アプリで付与済みの想定。未付与なら初期位置のまま。
+            return
+        }
+        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
+            .setMinUpdateIntervalMillis(1000L)
+            .build()
+        fusedClient.requestLocationUpdates(req, locationCallback, Looper.getMainLooper())
     }
 
     override fun onGetTemplate(): Template {
@@ -117,6 +171,7 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
             .build()
     }
 
+    /** 外部（テストや別データ源）から自機状態を注入する場合に使用 */
     fun updateOwnship(state: OwnshipState) {
         ownship = state
     }
