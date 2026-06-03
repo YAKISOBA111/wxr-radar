@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A320 NDカラーパレット -->
+    <color name="nd_bg">#000000</color>
+    <color name="nd_green">#00E000</color>
+    <color name="nd_cyan">#00CCFF</color>
+    <color name="nd_white">#FFFFFF</color>
+    <color name="nd_yellow">#FFFF00</color>
+    <color name="nd_magenta">#FF00FF</color>
+    <color name="nd_amber">#FFA500</color>
+    <color name="nd_red">#FF0000</color>
+    <color name="nd_grey">#404040</color>
+    <!-- パネル -->
+    <color name="panel_bg">#0A0A0A</color>
+    <color name="btn_bg">#141414</color>
+    <color name="btn_active">#001A24</color>
+    <color name="btn_border">#333333</color>
+    <color name="btn_border_active">#00AACC</color>
+</resources>

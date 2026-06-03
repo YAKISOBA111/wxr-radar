@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  スマホ縦画面:  RadarView (上・大) + コントロール (下)
+  スマホ横画面:  左パネル + RadarView (中・大) + 右パネル
+  ConstraintLayout で両対応
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- ══ アラートバナー (最前面) ══ -->
+    <TextView
+        android:id="@+id/alertBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⚠ WXR CAUTION"
+        android:textColor="#FFFFFF"
+        android:textSize="11sp"
+        android:letterSpacing="0.15"
+        android:background="#CC FF0000"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="3dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:elevation="10dp" />
+
+    <!-- ══ 左パネル (横画面時表示) ══ -->
+    <LinearLayout
+        android:id="@+id/leftPanel"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:background="#0A0A0A"
+        android:padding="6dp"
+        android:gravity="top|center_horizontal"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomPanel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/radarView"
+        app:layout_constraintWidth_percent="0.14">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="MODE" android:textSize="7sp" android:textColor="#444444"
+            android:letterSpacing="0.2" android:layout_marginBottom="3dp"/>
+        <Button android:id="@+id/btnArc"
+            style="@style/NdButton"
+            android:text="ARC"
+            android:layout_marginBottom="3dp"/>
+        <Button android:id="@+id/btnRose"
+            style="@style/NdButton"
+            android:text="ROSE"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="ORIENT" android:textSize="7sp" android:textColor="#444444"
+            android:letterSpacing="0.2" android:layout_marginBottom="3dp"/>
+        <Button android:id="@+id/btnHup"
+            style="@style/NdButton"
+            android:text="HDG UP"
+            android:layout_marginBottom="3dp"/>
+        <Button android:id="@+id/btnNup"
+            style="@style/NdButton"
+            android:text="N UP"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- HDG/GS データ -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="HDG" android:textSize="7sp" android:textColor="#444444"/>
+        <TextView android:id="@+id/tvHdg"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="---°" android:textSize="14sp" android:textColor="#00CCFF"
+            android:fontFamily="monospace" android:layout_marginBottom="4dp"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="GS" android:textSize="7sp" android:textColor="#444444"/>
+        <TextView android:id="@+id/tvGs"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="-- km/h" android:textSize="11sp" android:textColor="#FFFFFF"
+            android:fontFamily="monospace" android:layout_marginBottom="4dp"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="SRC" android:textSize="7sp" android:textColor="#444444"/>
+        <TextView android:id="@+id/tvSrc"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="---" android:textSize="10sp" android:textColor="#00CCFF"
+            android:fontFamily="monospace"/>
+    </LinearLayout>
+
+    <!-- ══ RadarView (中央・正方形) ══ -->
+    <com.wxr.radar.ui.RadarView
+        android:id="@+id/radarView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomPanel"
+        app:layout_constraintStart_toEndOf="@id/leftPanel"
+        app:layout_constraintEnd_toStartOf="@id/rightPanel"
+        app:layout_constraintDimensionRatio="1:1" />
+
+    <!-- ══ 右パネル (横画面時表示) ══ -->
+    <LinearLayout
+        android:id="@+id/rightPanel"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:background="#0A0A0A"
+        android:padding="6dp"
+        android:gravity="top|center_horizontal"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomPanel"
+        app:layout_constraintStart_toEndOf="@id/radarView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintWidth_percent="0.14">
+
+        <!-- RANGE -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="RANGE" android:textSize="7sp" android:textColor="#444444"
+            android:letterSpacing="0.2"/>
+        <TextView android:id="@+id/tvRange"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="80 NM" android:textSize="13sp" android:textColor="#00CCFF"
+            android:fontFamily="monospace" android:layout_marginBottom="2dp"/>
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginBottom="8dp">
+            <Button android:id="@+id/btnRangeDown"
+                android:layout_width="28dp" android:layout_height="24dp"
+                android:text="▼" android:textSize="9sp" android:textColor="#888888"
+                android:background="#141414" android:padding="0dp"/>
+            <Button android:id="@+id/btnRangeUp"
+                android:layout_width="28dp" android:layout_height="24dp"
+                android:text="▲" android:textSize="9sp" android:textColor="#888888"
+                android:background="#141414" android:padding="0dp" android:layout_marginStart="3dp"/>
+        </LinearLayout>
+
+        <!-- LAT/LON -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="LAT" android:textSize="7sp" android:textColor="#444444"/>
+        <TextView android:id="@+id/tvLat"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="--°--N" android:textSize="10sp" android:textColor="#00E000"
+            android:fontFamily="monospace" android:layout_marginBottom="4dp"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="LON" android:textSize="7sp" android:textColor="#444444"/>
+        <TextView android:id="@+id/tvLon"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="--°--E" android:textSize="10sp" android:textColor="#00E000"
+            android:fontFamily="monospace" android:layout_marginBottom="8dp"/>
+
+        <!-- HDG SOURCE -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="HDG SRC" android:textSize="7sp" android:textColor="#444444"/>
+        <TextView android:id="@+id/tvHdgSrc"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="---" android:textSize="11sp" android:textColor="#FFAA00"
+            android:fontFamily="monospace"/>
+
+    </LinearLayout>
+
+    <!-- ══ 下部コントロールパネル ══ -->
+    <LinearLayout
+        android:id="@+id/bottomPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#0A0A0A"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="5dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- 縦画面用: RANGE/MODE/ORIENT を横並びに -->
+        <LinearLayout
+            android:id="@+id/portrait_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="4dp">
+
+            <!-- MODE (縦画面時のみ表示: 横画面では leftPanel が担う) -->
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
+                <Button android:id="@+id/btnArcPortrait"
+                    style="@style/NdButtonSmall" android:text="ARC"
+                    android:layout_marginEnd="3dp"
+                    android:onClick="onArcClick"/>
+                <Button android:id="@+id/btnRosePortrait"
+                    style="@style/NdButtonSmall" android:text="ROSE"
+                    android:onClick="onRoseClick"/>
+            </LinearLayout>
+
+            <View android:layout_width="1dp" android:layout_height="20dp" android:background="#222222"/>
+
+            <!-- ORIENT -->
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
+                <Button android:id="@+id/btnHupPortrait"
+                    style="@style/NdButtonSmall" android:text="H-UP"
+                    android:layout_marginEnd="3dp"
+                    android:onClick="onHupClick"/>
+                <Button android:id="@+id/btnNupPortrait"
+                    style="@style/NdButtonSmall" android:text="N-UP"
+                    android:onClick="onNupClick"/>
+            </LinearLayout>
+
+            <View android:layout_width="1dp" android:layout_height="20dp" android:background="#222222"/>
+
+            <!-- RANGE -->
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
+                <Button android:id="@+id/btnRangeDownP"
+                    style="@style/NdButtonSmall" android:text="RNG▼"
+                    android:layout_marginEnd="3dp"
+                    android:onClick="onRngDownClick"/>
+                <Button android:id="@+id/btnRangeUpP"
+                    style="@style/NdButtonSmall" android:text="RNG▲"
+                    android:onClick="onRngUpClick"/>
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- WXR / TERR / ARPT レイヤートグル -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="2dp">
+
+            <Button android:id="@+id/btnWxr"
+                style="@style/NdButtonSmall" android:text="WXR"
+                android:layout_marginEnd="5dp"/>
+            <Button android:id="@+id/btnTerr"
+                style="@style/NdButtonSmall" android:text="TERR"
+                android:layout_marginEnd="5dp"/>
+            <Button android:id="@+id/btnArpt"
+                style="@style/NdButtonSmall" android:text="ARPT"
+                android:layout_marginEnd="12dp"/>
+
+            <!-- 凡例 -->
+            <View android:layout_width="10dp" android:layout_height="8dp" android:background="#00C800"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="10+" android:textSize="7sp" android:textColor="#555555" android:layout_marginEnd="4dp"/>
+            <View android:layout_width="10dp" android:layout_height="8dp" android:background="#C8C800"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="30+" android:textSize="7sp" android:textColor="#555555" android:layout_marginEnd="4dp"/>
+            <View android:layout_width="10dp" android:layout_height="8dp" android:background="#C80000"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="50+" android:textSize="7sp" android:textColor="#555555" android:layout_marginEnd="4dp"/>
+            <View android:layout_width="10dp" android:layout_height="8dp" android:background="#C800C8"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="80+" android:textSize="7sp" android:textColor="#555555"/>
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
