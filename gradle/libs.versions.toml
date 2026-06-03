@@ -22,8 +22,8 @@ lifecycle-livedata         = { group="androidx.lifecycle", name="lifecycle-lived
 coroutines-android         = { group="org.jetbrains.kotlinx", name="kotlinx-coroutines-android", version.ref="coroutines" }
 okhttp                     = { group="com.squareup.okhttp3", name="okhttp",                  version.ref="okhttp"     }
 gson                       = { group="com.google.code.gson", name="gson",                    version.ref="gson"       }
-car-app                    = { group="androidx.car.app",   name="car-app",                   version.ref="carApp"     }
-car-app-automotive         = { group="androidx.car.app",   name="car-app-automotive",        version.ref="carApp"     }
+car-app                    = { group="androidx.car.app",   name="app",                       version.ref="carApp"     }
+car-app-automotive         = { group="androidx.car.app",   name="app-automotive",            version.ref="carApp"     }
 constraintlayout           = { group="androidx.constraintlayout", name="constraintlayout",      version.ref="constraint" }
 play-location              = { group="com.google.android.gms",    name="play-services-location", version.ref="playLocation" }
 
