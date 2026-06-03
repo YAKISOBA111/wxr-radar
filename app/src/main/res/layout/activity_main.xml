@@ -20,7 +20,7 @@
         android:textColor="#FFFFFF"
         android:textSize="11sp"
         android:letterSpacing="0.15"
-        android:background="#CC FF0000"
+        android:background="#CCFF0000"
         android:paddingHorizontal="16dp"
         android:paddingVertical="3dp"
         android:visibility="gone"

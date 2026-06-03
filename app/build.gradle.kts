@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.gson)
+    implementation(libs.constraintlayout)
 
     // Android Auto / Automotive
     // implementation(libs.car.app)  // TODO: re-enable after basic build passes
