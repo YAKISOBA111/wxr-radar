@@ -1,0 +1,47 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 外周コンパスリング -->
+    <path
+        android:strokeColor="#00C8FF"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000"
+        android:pathData="M54,24 A30,30 0 1,1 53.99,24" />
+
+    <!-- 中間距離リング -->
+    <path
+        android:strokeColor="#00A0C8"
+        android:strokeWidth="1"
+        android:fillColor="#00000000"
+        android:pathData="M54,34 A20,20 0 1,1 53.99,34" />
+
+    <!-- 降水セル: 緑 -->
+    <path
+        android:fillColor="#00C800"
+        android:pathData="M62,40 a6,6 0 1,0 0.01,0 z" />
+    <!-- 降水セル: 黄 -->
+    <path
+        android:fillColor="#C8C800"
+        android:pathData="M64,42 a3,3 0 1,0 0.01,0 z" />
+    <!-- 降水セル: 赤 -->
+    <path
+        android:fillColor="#C80000"
+        android:pathData="M44,62 a4,4 0 1,0 0.01,0 z" />
+
+    <!-- ヘディングライン(黄) -->
+    <path
+        android:strokeColor="#FFFF00"
+        android:strokeWidth="2"
+        android:pathData="M54,54 L54,26" />
+
+    <!-- 自機シンボル(白・航空機型) -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M54,48 L54,60 M48,55 L60,55 M51,59 L57,59" />
+
+</vector>

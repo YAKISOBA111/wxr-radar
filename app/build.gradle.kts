@@ -48,7 +48,7 @@ dependencies {
     implementation(libs.play.location)
 
     // Android Auto / Automotive
-    // implementation(libs.car.app)  // TODO: re-enable after basic build passes
+    implementation(libs.car.app)
     // Automotive OS (実機ビルド時のみ有効)
     // implementation(libs.car.app.automotive)
 }
