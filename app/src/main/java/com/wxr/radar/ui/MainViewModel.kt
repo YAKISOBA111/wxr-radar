@@ -32,7 +32,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _settings   = MutableLiveData(NdSettings())
     val settings: LiveData<NdSettings> = _settings
 
-    private val _fetchState = MutableLiveData(FetchState.IDLE)
+    private val _fetchState = MutableLiveData<FetchState>(FetchState.Idle)
     val fetchState: LiveData<FetchState> = _fetchState
 
     private val _alertSevere = MutableLiveData(false)
@@ -93,16 +93,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun triggerFetch() {
         fetchJob?.cancel()
         fetchJob = viewModelScope.launch {
-            _fetchState.value = FetchState.FETCHING
+            _fetchState.value = FetchState.Fetching
             val state   = _ownship.value ?: OwnshipState()
             val rangeKm = _settings.value?.rangeKm ?: 148.0
-            val data    = repo.fetchRadar(state.lat, state.lon, rangeKm)
-            if (data != null) {
-                _radarData.value  = data
-                _fetchState.value = FetchState.LIVE
-                checkSevereAlert(data)
-            } else {
-                _fetchState.value = FetchState.ERROR
+            when (val result = repo.fetch(state.lat, state.lon, rangeKm)) {
+                is FetchResult.Success -> {
+                    _radarData.value  = result.data
+                    _fetchState.value = FetchState.Live(
+                        basetime       = result.basetime,
+                        hasPrecip      = result.hasPrecip,
+                        tilesReceived  = result.tilesReceived,
+                        tilesRequested = result.tilesRequested
+                    )
+                    checkSevereAlert(result.data)
+                }
+                is FetchResult.NetworkError -> {
+                    // 通信失敗時は古いデータを残しつつ状態だけエラーに
+                    _fetchState.value = FetchState.Error(result.message)
+                    _alertSevere.postValue(false)
+                }
             }
         }
     }
@@ -218,4 +227,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-enum class FetchState { IDLE, FETCHING, LIVE, ERROR }
+/**
+ * 取得状態。UI側で「受信中／受信成功／通信エラー」を明確に区別する。
+ */
+sealed class FetchState {
+    object Idle : FetchState()
+    object Fetching : FetchState()
+    /** 受信成功。観測時刻・雨の有無・欠測タイル数を保持 */
+    data class Live(
+        val basetime: String,
+        val hasPrecip: Boolean,
+        val tilesReceived: Int,
+        val tilesRequested: Int
+    ) : FetchState() {
+        val hasMissingTiles: Boolean get() = tilesReceived < tilesRequested
+    }
+    /** 通信エラー */
+    data class Error(val message: String) : FetchState()
+}

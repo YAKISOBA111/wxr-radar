@@ -135,11 +135,38 @@ class MainActivity : AppCompatActivity() {
             binding.tvRange.text = "${s.rangeNm} NM"
         }
         vm.fetchState.observe(this) { state ->
-            binding.tvSrc.text = when (state) {
-                FetchState.FETCHING -> "FETCH..."
-                FetchState.LIVE     -> "JMA LIVE"
-                FetchState.ERROR    -> "SIM"
-                FetchState.IDLE     -> "IDLE"
+            when (state) {
+                is FetchState.Idle -> {
+                    binding.tvSrc.text = "IDLE"
+                    binding.statusBanner.text = "● 受信待機"
+                    binding.statusBanner.setTextColor(0xFF888888.toInt())
+                }
+                is FetchState.Fetching -> {
+                    binding.tvSrc.text = "FETCH..."
+                    binding.statusBanner.text = "◌ 受信中..."
+                    binding.statusBanner.setTextColor(0xFFFFAA00.toInt())
+                }
+                is FetchState.Live -> {
+                    binding.tvSrc.text = "JMA LIVE"
+                    // 観測時刻 yyyyMMddHHmmss → HH:mm
+                    val t = state.basetime
+                    val hhmm = if (t.length >= 12) "${t.substring(8,10)}:${t.substring(10,12)}" else "--:--"
+                    val precip = if (state.hasPrecip) "降水あり" else "降水なし"
+                    if (state.hasMissingTiles) {
+                        // 一部タイル欠落 = 圏外境界など
+                        binding.statusBanner.text =
+                            "△ $hhmm 受信(欠測 ${state.tilesRequested - state.tilesReceived}/${state.tilesRequested})  $precip"
+                        binding.statusBanner.setTextColor(0xFFFFCC00.toInt())
+                    } else {
+                        binding.statusBanner.text = "● $hhmm 受信OK  $precip"
+                        binding.statusBanner.setTextColor(0xFF00E000.toInt())
+                    }
+                }
+                is FetchState.Error -> {
+                    binding.tvSrc.text = "ERROR"
+                    binding.statusBanner.text = "✕ 受信失敗: ${state.message}"
+                    binding.statusBanner.setTextColor(0xFFFF4040.toInt())
+                }
             }
         }
         vm.alertSevere.observe(this) { severe ->

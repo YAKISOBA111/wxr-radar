@@ -69,6 +69,7 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
 
     private var surfaceContainer: SurfaceContainer? = null
     private var sweepAngle = 0f
+    private var statusText = "受信待機"
 
     // GPS
     private val fusedClient =
@@ -180,8 +181,23 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
         fetchJob?.cancel()
         fetchJob = scope.launch {
             while (isActive) {
-                val data = repo.fetchRadar(ownship.lat, ownship.lon, settings.rangeKm)
-                if (data != null) radar = data
+                when (val result = repo.fetch(ownship.lat, ownship.lon, settings.rangeKm)) {
+                    is FetchResult.Success -> {
+                        radar = result.data
+                        val t = result.basetime
+                        val hhmm = if (t.length >= 12) "${t.substring(8,10)}:${t.substring(10,12)}" else "--:--"
+                        statusText = when {
+                            result.hasMissingTiles ->
+                                "△ $hhmm 欠測${result.tilesRequested - result.tilesReceived}"
+                            result.hasPrecip -> "● $hhmm 降水あり"
+                            else -> "● $hhmm 降水なし"
+                        }
+                    }
+                    is FetchResult.NetworkError -> {
+                        statusText = "✕ 受信失敗"
+                    }
+                }
+                renderToSurface()
                 delay(5 * 60 * 1000L)
             }
         }
@@ -192,7 +208,7 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
         val surface   = container.surface ?: return
         try {
             val canvas = surface.lockCanvas(null) ?: return
-            NDDrawer.draw(canvas, radar, ownship, settings, sweepAngle)
+            NDDrawer.draw(canvas, radar, ownship, settings, sweepAngle, statusText)
             surface.unlockCanvasAndPost(canvas)
         } catch (_: Exception) {}
     }
@@ -228,7 +244,7 @@ object NDDrawer {
     private val infoP        = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(0,200,255); typeface = Typeface.MONOSPACE; textAlign = Paint.Align.LEFT }
 
-    fun draw(canvas: Canvas, radar: RadarData?, own: OwnshipState, cfg: NdSettings, sweepAngle: Float) {
+    fun draw(canvas: Canvas, radar: RadarData?, own: OwnshipState, cfg: NdSettings, sweepAngle: Float, statusText: String) {
         val w = canvas.width.toFloat()
         val h = canvas.height.toFloat()
         val side   = min(w, h)
@@ -271,6 +287,19 @@ object NDDrawer {
         infoP.textSize    = fs * 0.9f
         if (cfg.wxrOn) canvas.drawText("WXR", 12f, h - 12f, wxrLabel)
         canvas.drawText("HDG ${own.headingDeg.toInt().toString().padStart(3,'0')}°  GS ${own.speedKmh.toInt()}km/h  RNG ${cfg.rangeNm}NM", 12f, 22f, infoP)
+        // データ受信状態を右上に表示
+        val statusP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = Typeface.MONOSPACE
+            textSize = fs * 0.9f
+            textAlign = Paint.Align.RIGHT
+            color = when {
+                statusText.startsWith("✕") -> Color.rgb(255, 64, 64)
+                statusText.startsWith("△") -> Color.rgb(255, 204, 0)
+                statusText.startsWith("●") -> Color.rgb(0, 224, 0)
+                else -> Color.rgb(150, 150, 150)
+            }
+        }
+        canvas.drawText(statusText, w - 12f, 22f, statusP)
     }
 
     private fun clipPath(cx: Float, ownY: Float, radius: Float, isArc: Boolean): Path {

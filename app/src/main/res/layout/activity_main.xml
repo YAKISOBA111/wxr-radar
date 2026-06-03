@@ -27,6 +27,25 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        android:elevation="11dp" />
+
+    <!-- ══ データ受信状態バナー (常時表示・最前面) ══ -->
+    <TextView
+        android:id="@+id/statusBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="● 受信待機"
+        android:textColor="#888888"
+        android:textSize="10sp"
+        android:fontFamily="monospace"
+        android:letterSpacing="0.05"
+        android:background="#CC000000"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="2dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="2dp"
         android:elevation="10dp" />
 
     <!-- ══ 左パネル (横画面時表示) ══ -->
