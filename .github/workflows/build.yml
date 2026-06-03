@@ -8,6 +8,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,20 +25,27 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      # エラーを全て出力 (2>&1でstderrも取得)
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --info 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
+        run: ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
 
-      # ビルド失敗時はエラーだけ抽出してサマリーに表示
-      - name: Show errors on failure
+      # ビルド失敗時: エラーをIssueに投稿 (ここから見える)
+      - name: Post errors as Issue
         if: failure()
-        run: |
-          echo "## ❌ Build Errors" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          grep -E "^e:|error:|Unresolved|FAILED|> Task|Cannot|cannot" build.log | head -50 >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          # コンソールにも出力
-          grep -E "^e:|error:|Unresolved|FAILED|> Task|Cannot|cannot" build.log | head -80 || true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.readFileSync('build.log', 'utf8');
+            const lines = log.split('\n');
+            const errors = lines.filter(l =>
+              /^e:|error:|Unresolved|FAILED|> Task|Cannot|cannot/.test(l)
+            ).slice(0, 60).join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Build failed: ${context.sha.slice(0,7)}`,
+              body: `## Build Errors\n\`\`\`\n${errors}\n\`\`\`\n\n[Run](${context.payload.repository.html_url}/actions/runs/${context.runId})`
+            });
 
       - name: Upload APK
         if: success()
@@ -44,18 +55,9 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          retention-days: 7
-
       - name: Build summary
         if: success()
         run: |
           SIZE=$(du -sh app/build/outputs/apk/debug/app-debug.apk | cut -f1)
-          echo "## ✅ Build Success" >> $GITHUB_STEP_SUMMARY
-          echo "APK size: $SIZE" >> $GITHUB_STEP_SUMMARY
-          echo "👆 Artifacts タブから app-debug.apk をDLしてください" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Build Success — APK: $SIZE" >> $GITHUB_STEP_SUMMARY
+          echo "Artifacts タブから wxr-radar-debug をダウンロード" >> $GITHUB_STEP_SUMMARY
