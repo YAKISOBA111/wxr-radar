@@ -1,0 +1,81 @@
+{
+  "version": 8,
+  "name": "WXR ND Basemap (roads only, dark)",
+  "metadata": {
+    "note": "進行方向の雨雲レーダー用の背景基図。道路と水域のみの極小ダークスタイル。Planetiler の OpenMapTiles スキーマ (--output=japan.pmtiles) を前提。雨雲(JMA)ラスターは別途このスタイルの上にソースを重ねる。"
+  },
+  "glyphs": "asset://fonts/{fontstack}/{range}.pbf",
+  "sources": {
+    "basemap": {
+      "type": "vector",
+      "url": "pmtiles://asset://japan.pmtiles",
+      "attribution": "\u00a9 OpenStreetMap contributors"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#05070a" }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "basemap",
+      "source-layer": "water",
+      "paint": { "fill-color": "#0a1620" }
+    },
+    {
+      "id": "waterway",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "waterway",
+      "paint": { "line-color": "#0d2230", "line-width": 0.8 }
+    },
+    {
+      "id": "road-minor",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "transportation",
+      "filter": ["in", "class", "minor", "service", "track"],
+      "minzoom": 11,
+      "paint": {
+        "line-color": "#1c2630",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.4, 16, 1.6]
+      }
+    },
+    {
+      "id": "road-secondary",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "transportation",
+      "filter": ["in", "class", "secondary", "tertiary"],
+      "paint": {
+        "line-color": "#2a3a48",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.5, 16, 2.4]
+      }
+    },
+    {
+      "id": "road-primary",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "transportation",
+      "filter": ["in", "class", "primary", "trunk"],
+      "paint": {
+        "line-color": "#3f5a6e",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.6, 16, 3.2]
+      }
+    },
+    {
+      "id": "road-motorway",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "transportation",
+      "filter": ["==", "class", "motorway"],
+      "paint": {
+        "line-color": "#00aacc",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 16, 4.0]
+      }
+    }
+  ]
+}

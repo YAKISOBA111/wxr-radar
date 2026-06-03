@@ -92,6 +92,7 @@ class JmaRepository(
         FetchResult.Success(
             data = data,
             basetime = times.basetime,
+            validtime = times.validtime,
             tilesReceived = tiles.received,
             tilesRequested = tiles.requested,
             hasPrecip = maxMmh >= 1f
@@ -247,6 +248,8 @@ sealed class FetchResult {
     data class Success(
         val data: RadarData,
         val basetime: String,
+        /** タイルURLに必要 (MapLibre雨雲ソースの差し替えに使用) */
+        val validtime: String,
         val tilesReceived: Int,
         val tilesRequested: Int,
         val hasPrecip: Boolean

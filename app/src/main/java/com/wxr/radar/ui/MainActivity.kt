@@ -12,11 +12,13 @@ import androidx.core.content.ContextCompat
 import com.wxr.radar.data.NdMode
 import com.wxr.radar.data.NdOrient
 import com.wxr.radar.databinding.ActivityMainBinding
+import com.wxr.radar.map.MapController
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val vm: MainViewModel by viewModels()
+    private lateinit var mapController: MapController
 
     // GPS権限リクエスト
     private val locationPermLauncher = registerForActivityResult(
@@ -41,9 +43,30 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setupMap(savedInstanceState)
         setupControls()
         observeViewModel()
         checkLocationPermission()
+    }
+
+    // ──────────────────────────────────────────
+    //  地図 (道路基図 + 雨雲) のセットアップ
+    // ──────────────────────────────────────────
+    private fun setupMap(savedInstanceState: Bundle?) {
+        binding.mapView.onCreate(savedInstanceState)
+        mapController = MapController(this)
+        mapController.attach(binding.mapView) {
+            // 基図(PMTiles)未同梱なら計器上に注意表示
+            binding.radarView.basemapMissing = !mapController.basemapAvailable
+        }
+        // 計器の平滑化ヘディングに地図カメラを毎フレーム同期
+        binding.radarView.onFrame = { displayHeading ->
+            val own = vm.ownship.value
+            val cfg = vm.settings.value
+            if (own != null && cfg != null) {
+                mapController.applyCamera(own, cfg, displayHeading)
+            }
+        }
     }
 
     // ──────────────────────────────────────────
@@ -108,15 +131,13 @@ class MainActivity : AppCompatActivity() {
     //  ViewModel 購読
     // ──────────────────────────────────────────
     private fun observeViewModel() {
-        // レーダー/ownship/設定が更新されたら RadarView を再描画
+        // ownship/設定が更新されたら計器オーバーレイを再描画
         fun refresh() {
-            val radar    = vm.radarData.value
             val ownship  = vm.ownship.value   ?: return
             val settings = vm.settings.value  ?: return
-            binding.radarView.update(radar, ownship, settings)
+            binding.radarView.update(ownship, settings)
         }
 
-        vm.radarData.observe(this) { refresh() }
         vm.ownship.observe(this)   { own ->
             refresh()
             // ステータス表示更新
@@ -135,6 +156,8 @@ class MainActivity : AppCompatActivity() {
             refresh()
             binding.tvRange.text = s.rangeLabel()
             binding.btnUnit.text = s.distanceUnit.label
+            // WXR トグルを雨雲レイヤーの表示/非表示に連動
+            mapController.setRainVisible(s.wxrOn)
         }
         vm.fetchState.observe(this) { state ->
             when (state) {
@@ -150,6 +173,8 @@ class MainActivity : AppCompatActivity() {
                 }
                 is FetchState.Live -> {
                     binding.tvSrc.text = "JMA LIVE"
+                    // 最新時刻で雨雲ラスターを差し替え
+                    mapController.updateRain(state.basetime, state.validtime)
                     // 観測時刻 yyyyMMddHHmmss → HH:mm
                     val t = state.basetime
                     val hhmm = if (t.length >= 12) "${t.substring(8,10)}:${t.substring(10,12)}" else "--:--"
@@ -174,6 +199,20 @@ class MainActivity : AppCompatActivity() {
         vm.alertSevere.observe(this) { severe ->
             binding.alertBanner.visibility = if (severe) View.VISIBLE else View.GONE
         }
+    }
+
+    // ──────────────────────────────────────────
+    //  MapView ライフサイクル委譲
+    // ──────────────────────────────────────────
+    override fun onStart()  { super.onStart();  binding.mapView.onStart()  }
+    override fun onResume() { super.onResume(); binding.mapView.onResume() }
+    override fun onPause()  { binding.mapView.onPause();  super.onPause()  }
+    override fun onStop()   { binding.mapView.onStop();   super.onStop()   }
+    override fun onDestroy() { binding.mapView.onDestroy(); super.onDestroy() }
+    override fun onLowMemory() { super.onLowMemory(); binding.mapView.onLowMemory() }
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        binding.mapView.onSaveInstanceState(outState)
     }
 
     // ──────────────────────────────────────────

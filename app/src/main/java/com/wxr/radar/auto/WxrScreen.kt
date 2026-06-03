@@ -233,8 +233,8 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
 }
 
 // ─────────────────────────────────────────────────────────
-//  NDDrawer: A320 NDスタイル描画 (Surface Canvas 直接描画)
-//  RadarView と同一ロジック
+//  NDDrawer: 航空機ND風 計器描画 (Surface Canvas 直接描画)
+//  v1のAutoは従来方式 (雨雲グリッド+計器)。基図表示は実装計画§7-1参照
 // ─────────────────────────────────────────────────────────
 object NDDrawer {
 

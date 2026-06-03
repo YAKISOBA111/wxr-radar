@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- A320 NDパネルボタン (サイドパネル用) -->
+    <!-- ND計器風パネルボタン (サイドパネル用) -->
     <style name="NdButton">
         <item name="android:layout_width">60dp</item>
         <item name="android:layout_height">26dp</item>

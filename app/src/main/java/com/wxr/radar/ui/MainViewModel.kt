@@ -109,6 +109,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _radarData.value  = result.data
                     _fetchState.value = FetchState.Live(
                         basetime       = result.basetime,
+                        validtime      = result.validtime,
                         hasPrecip      = result.hasPrecip,
                         tilesReceived  = result.tilesReceived,
                         tilesRequested = result.tilesRequested
@@ -244,6 +245,8 @@ sealed class FetchState {
     /** 受信成功。観測時刻・雨の有無・欠測タイル数を保持 */
     data class Live(
         val basetime: String,
+        /** MapLibre 雨雲タイルソースの差し替えに使用 */
+        val validtime: String,
         val hasPrecip: Boolean,
         val tilesReceived: Int,
         val tilesRequested: Int

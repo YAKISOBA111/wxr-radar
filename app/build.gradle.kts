@@ -32,6 +32,11 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    // PMTiles はランダムアクセスが必要なため AAPT の圧縮対象から除外する
+    androidResources {
+        noCompress += "pmtiles"
+    }
 }
 
 dependencies {
@@ -46,6 +51,9 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.constraintlayout)
     implementation(libs.play.location)
+
+    // 地図エンジン (道路基図 PMTiles + JMA雨雲ラスター)
+    implementation(libs.maplibre)
 
     // Android Auto / Automotive
     implementation(libs.car.app)

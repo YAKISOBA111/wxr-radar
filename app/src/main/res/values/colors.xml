@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- A320 NDカラーパレット -->
+    <!-- 航空機ND風カラーパレット -->
     <color name="nd_bg">#000000</color>
     <color name="nd_green">#00E000</color>
     <color name="nd_cyan">#00CCFF</color>
