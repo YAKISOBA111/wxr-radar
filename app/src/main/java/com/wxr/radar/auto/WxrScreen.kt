@@ -2,8 +2,12 @@ package com.wxr.radar.auto
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
-import android.graphics.Rect
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.SweepGradient
+import android.graphics.Typeface
 import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
@@ -13,294 +17,355 @@ import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
-import com.wxr.radar.data.*
-import com.wxr.radar.ui.RadarView
+import com.wxr.radar.data.JmaRepository
+import com.wxr.radar.data.NdMode
+import com.wxr.radar.data.NdOrient
+import com.wxr.radar.data.NdSettings
+import com.wxr.radar.data.OwnshipState
+import com.wxr.radar.data.RadarData
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.sin
 
-/**
- * Android Auto 表示画面
- *
- * NavigationTemplate の SurfaceCallback を使い、
- * 車載ディスプレイの Surface に RadarView の描画ロジックを直接呼び出す。
- *
- * ポイント:
- * - RadarView は View だが、描画ロジック (onDraw) はそのまま流用
- * - Surface のサイズに合わせてダミー View を作成し drawToBitmap → Surface に転写
- */
+class WxrCarAppService : androidx.car.app.CarAppService() {
+    override fun createHostValidator() = androidx.car.app.validation.HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
+    override fun onCreateSession() = WxrSession()
+}
+
+class WxrSession : androidx.car.app.Session() {
+    override fun onCreateScreen(intent: android.content.Intent): Screen = WxrScreen(carContext)
+}
+
 class WxrScreen(carContext: CarContext) : Screen(carContext) {
 
-    // ViewModel の代わりにリポジトリを直接持つ
-    // (CarAppService は Application Context しか持てないため)
-    private val repo     = JmaRepository()
-    private var radar: RadarData?    = null
-    private var ownship  = OwnshipState()
+    private val repo    = JmaRepository()
+    private val scope   = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var fetchJob: Job? = null
+
+    private var radar: RadarData?   = null
+    private var ownship = OwnshipState()
     private var settings = NdSettings(mode = NdMode.ARC, orient = NdOrient.HEADING_UP, rangeNm = 80)
 
-    // Surface描画用
     private var surfaceContainer: SurfaceContainer? = null
-    private val radarDrawer = RadarSurfaceDrawer()
+    private var sweepAngle = 0f
 
-    // 自動更新
-    private var fetchJob: kotlinx.coroutines.Job? = null
+    // スイープアニメーション
+    private val sweepJob = scope.launch {
+        while (isActive) {
+            sweepAngle = (sweepAngle + 1.5f) % 360f
+            renderToSurface()
+            delay(33)
+        }
+    }
 
     private val surfaceCallback = object : SurfaceCallback {
         override fun onSurfaceAvailable(container: SurfaceContainer) {
             surfaceContainer = container
-            startPeriodicFetch()
-            renderToSurface()
+            startFetch()
         }
         override fun onSurfaceDestroyed(container: SurfaceContainer) {
             surfaceContainer = null
-            fetchJob?.cancel()
-        }
-        override fun onVisibleAreaChanged(visibleArea: Rect) {
-            renderToSurface()
-        }
-        override fun onStableAreaChanged(stableArea: Rect) {
-            renderToSurface()
         }
     }
 
     init {
-        carContext.getCarService(AppManager::class.java)
-            .setSurfaceCallback(surfaceCallback)
+        carContext.getCarService(AppManager::class.java).setSurfaceCallback(surfaceCallback)
     }
 
-    // ──────────────────────────────────────────
-    //  Template (NavigationTemplate でフルスクリーン描画)
-    // ──────────────────────────────────────────
     override fun onGetTemplate(): Template {
-        val actionStrip = ActionStrip.Builder()
-            .addAction(
-                Action.Builder()
-                    .setTitle(if (settings.mode == NdMode.ARC) "ROSE" else "ARC")
-                    .setOnClickListener {
-                        settings = settings.copy(
-                            mode = if (settings.mode == NdMode.ARC) NdMode.ROSE else NdMode.ARC
-                        )
-                        renderToSurface()
-                        invalidate()
-                    }
-                    .build()
-            )
-            .addAction(
-                Action.Builder()
-                    .setTitle(if (settings.orient == NdOrient.HEADING_UP) "N-UP" else "H-UP")
-                    .setOnClickListener {
-                        settings = settings.copy(
-                            orient = if (settings.orient == NdOrient.HEADING_UP)
-                                NdOrient.NORTH_UP else NdOrient.HEADING_UP
-                        )
-                        renderToSurface()
-                        invalidate()
-                    }
-                    .build()
-            )
-            .addAction(
-                Action.Builder()
-                    .setTitle("RNG+")
-                    .setOnClickListener {
-                        val steps = listOf(10,20,40,80,160,320)
-                        val i = steps.indexOf(settings.rangeNm)
-                        if (i < steps.size - 1) {
-                            settings = settings.copy(rangeNm = steps[i+1])
-                            startPeriodicFetch()
-                            renderToSurface()
-                            invalidate()
-                        }
-                    }
-                    .build()
-            )
-            .addAction(
-                Action.Builder()
-                    .setTitle("RNG-")
-                    .setOnClickListener {
-                        val steps = listOf(10,20,40,80,160,320)
-                        val i = steps.indexOf(settings.rangeNm)
-                        if (i > 0) {
-                            settings = settings.copy(rangeNm = steps[i-1])
-                            startPeriodicFetch()
-                            renderToSurface()
-                            invalidate()
-                        }
-                    }
-                    .build()
-            )
-            .build()
+        val modeLabel   = if (settings.mode   == NdMode.ARC)           "ROSE" else "ARC"
+        val orientLabel = if (settings.orient == NdOrient.HEADING_UP)  "N-UP" else "H-UP"
 
         return NavigationTemplate.Builder()
-            .setActionStrip(actionStrip)
+            .setActionStrip(
+                ActionStrip.Builder()
+                    .addAction(Action.Builder().setTitle(modeLabel).setOnClickListener {
+                        settings = settings.copy(mode = if (settings.mode == NdMode.ARC) NdMode.ROSE else NdMode.ARC)
+                        invalidate()
+                    }.build())
+                    .addAction(Action.Builder().setTitle(orientLabel).setOnClickListener {
+                        settings = settings.copy(orient = if (settings.orient == NdOrient.HEADING_UP) NdOrient.NORTH_UP else NdOrient.HEADING_UP)
+                        invalidate()
+                    }.build())
+                    .addAction(Action.Builder().setTitle("RNG+").setOnClickListener {
+                        val steps = listOf(10,20,40,80,160,320)
+                        val i = steps.indexOf(settings.rangeNm)
+                        if (i < steps.size - 1) { settings = settings.copy(rangeNm = steps[i+1]); startFetch(); invalidate() }
+                    }.build())
+                    .addAction(Action.Builder().setTitle("RNG-").setOnClickListener {
+                        val steps = listOf(10,20,40,80,160,320)
+                        val i = steps.indexOf(settings.rangeNm)
+                        if (i > 0) { settings = settings.copy(rangeNm = steps[i-1]); startFetch(); invalidate() }
+                    }.build())
+                    .build()
+            )
             .build()
     }
 
-    // ──────────────────────────────────────────
-    //  Surface に描画
-    // ──────────────────────────────────────────
+    fun updateOwnship(state: OwnshipState) {
+        ownship = state
+    }
+
+    private fun startFetch() {
+        fetchJob?.cancel()
+        fetchJob = scope.launch {
+            while (isActive) {
+                val data = repo.fetchRadar(ownship.lat, ownship.lon, settings.rangeKm)
+                if (data != null) radar = data
+                delay(5 * 60 * 1000L)
+            }
+        }
+    }
+
     private fun renderToSurface() {
         val container = surfaceContainer ?: return
         val surface   = container.surface ?: return
         try {
-            val canvas: Canvas = surface.lockHardwareCanvas() ?: surface.lockCanvas(null)
-            radarDrawer.draw(canvas, radar, ownship, settings)
+            val canvas = surface.lockCanvas(null) ?: return
+            NDDrawer.draw(canvas, radar, ownship, settings, sweepAngle)
             surface.unlockCanvasAndPost(canvas)
-        } catch (e: Exception) {
-            // Surface が無効な場合は無視
-        }
+        } catch (_: Exception) {}
     }
 
-    // ──────────────────────────────────────────
-    //  定期取得
-    // ──────────────────────────────────────────
-    private fun startPeriodicFetch() {
-        fetchJob?.cancel()
-        fetchJob = kotlinx.coroutines.MainScope().launch {
-            while (true) {
-                val data = repo.fetchRadar(ownship.lat, ownship.lon, settings.rangeKm)
-                if (data != null) {
-                    radar = data
-                    renderToSurface()
-                }
-                kotlinx.coroutines.delay(5 * 60 * 1000L)
-            }
-        }
-    }
-
-    /** GPS更新コールバック (外部から呼ぶ) */
-    fun updateOwnship(state: OwnshipState) {
-        ownship = state
-        renderToSurface()
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 }
 
-// ──────────────────────────────────────────────────────────
-//  RadarSurfaceDrawer — Surface Canvas への A320 ND 描画
-//  RadarView の描画ロジックを Canvas直描き版として再実装
-// ──────────────────────────────────────────────────────────
-private class JmaRepository : com.wxr.radar.data.JmaRepository()
+// ─────────────────────────────────────────────────────────
+//  NDDrawer: A320 NDスタイル描画 (Surface Canvas 直接描画)
+//  RadarView と同一ロジック
+// ─────────────────────────────────────────────────────────
+object NDDrawer {
 
-class RadarSurfaceDrawer {
+    private val bgPaint      = Paint().apply { color = Color.BLACK }
+    private val ringPaint    = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(80,0,160,200); style = Paint.Style.STROKE; strokeWidth = 1.5f }
+    private val compassMaj   = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.5f }
+    private val compassMin   = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(100,255,255,255); style = Paint.Style.STROKE; strokeWidth = 0.8f }
+    private val compassTxt   = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; textAlign = Paint.Align.CENTER; typeface = Typeface.MONOSPACE }
+    private val hdgLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.YELLOW; style = Paint.Style.STROKE; strokeWidth = 2.5f }
+    private val trackPaint   = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(0,230,0); style = Paint.Style.STROKE; strokeWidth = 1.5f
+        pathEffect = DashPathEffect(floatArrayOf(8f,6f), 0f) }
+    private val ownPaint     = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 2f }
+    private val labelPaint   = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(140,0,200,220); typeface = Typeface.MONOSPACE }
+    private val wxrLabel     = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(0,230,0)
+        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD) }
+    private val infoP        = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(0,200,255); typeface = Typeface.MONOSPACE; textAlign = Paint.Align.LEFT }
 
-    private val bgPaint = Paint().apply { color = Color.BLACK }
-
-    fun draw(
-        canvas: Canvas,
-        radar: RadarData?,
-        own: OwnshipState,
-        cfg: NdSettings
-    ) {
+    fun draw(canvas: Canvas, radar: RadarData?, own: OwnshipState, cfg: NdSettings, sweepAngle: Float) {
         val w = canvas.width.toFloat()
         val h = canvas.height.toFloat()
+        val side   = min(w, h)
+        val isArc  = cfg.mode == NdMode.ARC
+        val cx     = w / 2f
+        val ownY   = if (isArc) h * 0.78f else h / 2f
+        val radius = if (isArc) side * 0.72f else side * 0.46f
 
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-        // RadarView を View として生成して Bitmap に描画 → Surface へ転写
-        // ※ CarContext は UI Context を持たないため、View を inflate できない
-        // → 描画ロジックを直接 Canvas に書く
-
-        // シンプルな fallback: テキスト情報のみ表示
-        // (完全なCanvas描画は RadarView と同一ロジックをここに移植するか、
-        //  Bitmap経由でオフスクリーン描画する方法を採る)
-        val infoP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color     = Color.rgb(0, 200, 255)
-            textSize  = h * 0.035f
-            typeface  = android.graphics.Typeface.MONOSPACE
-            textAlign = Paint.Align.CENTER
-        }
-
-        // ── 簡易WXR表示 (Auto) ──
-        // Surface上でRadarViewと同じ描画ロジックを呼び出す
-        val view = android.widget.FrameLayout(android.app.Application())
-        // NOTE: 完全な実装では RadarView の描画ロジックを
-        // このクラスに完全移植するか、Bitmap 経由で描画する
-
-        // ヘッダー情報
-        canvas.drawText("WXR  ${cfg.rangeNm}NM  " +
-            (if (cfg.mode == NdMode.ARC) "ARC" else "ROSE") + "  " +
-            (if (cfg.orient == NdOrient.HEADING_UP) "H-UP" else "N-UP"),
-            w / 2, h * 0.05f, infoP)
-
-        // HDG/GS
-        val dataP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color    = Color.rgb(0, 230, 0)
-            textSize = h * 0.03f
-            typeface = android.graphics.Typeface.MONOSPACE
-            textAlign = Paint.Align.LEFT
-        }
-        canvas.drawText("HDG  ${own.headingDeg.toInt().toString().padStart(3,'0')}°", 20f, h * 0.92f, dataP)
-        canvas.drawText("GS   ${own.speedKmh.toInt()} km/h", 20f, h * 0.96f, dataP)
-
-        dataP.textAlign = Paint.Align.RIGHT
-        val srcTxt = if (radar != null) "JMA LIVE" else "NO DATA"
-        dataP.color = if (radar != null) Color.rgb(0,200,255) else Color.rgb(200,100,0)
-        canvas.drawText(srcTxt, w - 20f, h * 0.96f, dataP)
-
-        // レーダーデータがある場合は中心に円形表示
-        if (radar != null) {
-            drawSimpleRadar(canvas, radar, own, cfg, w, h)
-        }
-    }
-
-    private fun drawSimpleRadar(
-        canvas: Canvas, radar: RadarData,
-        own: OwnshipState, cfg: NdSettings,
-        w: Float, h: Float
-    ) {
-        val cx     = w / 2f
-        val ownY   = if (cfg.mode == NdMode.ARC) h * 0.75f else h / 2f
-        val radius = if (cfg.mode == NdMode.ARC) minOf(w,h) * 0.70f else minOf(w,h) * 0.45f
-
-        val g     = radar.gridSize
-        val pxPerCell = radius * 2f / g
         val rotDeg = if (cfg.orient == NdOrient.HEADING_UP) -own.headingDeg else 0f
 
+        // クリップ
         canvas.save()
-        canvas.translate(cx, ownY)
-        canvas.rotate(rotDeg)
-        canvas.translate(-cx, -ownY)
+        canvas.clipPath(clipPath(cx, ownY, radius, isArc))
 
+        // WXR
+        if (cfg.wxrOn && radar != null) drawWxr(canvas, radar, own, cfg, cx, ownY, radius, rotDeg)
+
+        // スイープ
+        if (cfg.wxrOn) drawSweep(canvas, cx, ownY, radius, rotDeg, sweepAngle)
+
+        canvas.restore()
+
+        // ARCマスク
+        if (isArc) drawArcMask(canvas, cx, ownY, radius, w, h)
+
+        // 距離リング
+        drawRings(canvas, cx, ownY, radius, cfg, side)
+
+        // コンパス
+        drawCompass(canvas, cx, ownY, radius, rotDeg, cfg, own, side)
+
+        // 自機
+        drawOwnship(canvas, cx, ownY, radius, cfg, own, side)
+
+        // ラベル
+        val fs = (side * 0.025f).coerceAtLeast(9f)
+        wxrLabel.textSize = fs
+        infoP.textSize    = fs * 0.9f
+        if (cfg.wxrOn) canvas.drawText("WXR", 12f, h - 12f, wxrLabel)
+        canvas.drawText("HDG ${own.headingDeg.toInt().toString().padStart(3,'0')}°  GS ${own.speedKmh.toInt()}km/h  RNG ${cfg.rangeNm}NM", 12f, 22f, infoP)
+    }
+
+    private fun clipPath(cx: Float, ownY: Float, radius: Float, isArc: Boolean): Path {
+        val p = Path()
+        if (isArc) {
+            p.moveTo(cx, ownY)
+            p.arcTo(RectF(cx-radius,ownY-radius,cx+radius,ownY+radius), -150f, 120f)
+            p.close()
+        } else {
+            p.addCircle(cx, ownY, radius, Path.Direction.CW)
+        }
+        return p
+    }
+
+    private fun drawWxr(canvas: Canvas, radar: RadarData, own: OwnshipState, cfg: NdSettings,
+                        cx: Float, ownY: Float, radius: Float, rotDeg: Float) {
+        val g        = radar.gridSize
+        val pxPerKm  = radius / cfg.rangeKm.toFloat()
+        val kmPerDeg = 111f
+        val b        = radar.bounds
+        val latSpan  = ((b.latMax - b.latMin) * kmPerDeg).toFloat()
+        val lonSpan  = ((b.lonMax - b.lonMin) * kmPerDeg * cos(Math.toRadians(own.lat)).toFloat())
+        val dw = lonSpan * pxPerKm
+        val dh = latSpan * pxPerKm
+        val ox = ((own.lon - b.lonMin) * kmPerDeg * cos(Math.toRadians(own.lat))).toFloat() * pxPerKm
+        val oy = ((b.latMax - own.lat) * kmPerDeg).toFloat() * pxPerKm
+
+        canvas.save()
+        canvas.translate(cx, ownY); canvas.rotate(rotDeg); canvas.translate(-cx, -ownY)
+
+        val cellW = dw / g; val cellH = dh / g
         val p = Paint()
         for (gy in 0 until g) {
             for (gx in 0 until g) {
-                val mmh = radar.getAt(gx, gy)
-                val color = wxrColor(mmh)
+                val color = wxrColor(radar.getAt(gx, gy))
                 if (color == Color.TRANSPARENT) continue
                 p.color = color
-                val x = cx - radius + gx * pxPerCell
-                val y = ownY - radius + gy * pxPerCell
-                canvas.drawRect(x, y, x + pxPerCell + 1, y + pxPerCell + 1, p)
+                val x = cx - ox + gx * cellW
+                val y = ownY - oy + gy * cellH
+                canvas.drawRect(x, y, x + cellW + 0.5f, y + cellH + 0.5f, p)
             }
         }
         canvas.restore()
-
-        // リング
-        val ringP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(80, 0,160,200)
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-        }
-        canvas.drawCircle(cx, ownY, radius / 2, ringP)
-        canvas.drawCircle(cx, ownY, radius,     ringP)
-
-        // 自機
-        val sp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 2f
-        }
-        val s = radius * 0.04f
-        canvas.drawLine(cx, ownY-s*2f, cx, ownY+s*1.5f, sp)
-        canvas.drawLine(cx-s*2f, ownY+s*0.3f, cx+s*2f, ownY+s*0.3f, sp)
-
-        // ヘディングライン
-        val hdgP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.YELLOW; style = Paint.Style.STROKE; strokeWidth = 2f
-        }
-        canvas.drawLine(cx, ownY, cx, ownY - radius * 0.92f, hdgP)
     }
 
-    private fun wxrColor(mmh: Float): Int = when {
-        mmh <  1f -> Color.TRANSPARENT
-        mmh < 10f -> Color.argb(150, 0, 160, 0)
-        mmh < 30f -> Color.argb(200, 0, 200, 0)
-        mmh < 50f -> Color.argb(210, 200, 200, 0)
-        mmh < 80f -> Color.argb(230, 200, 0, 0)
-        else      -> Color.argb(255, 200, 0, 200)
+    private fun wxrColor(v: Float): Int = when {
+        v <  1f -> Color.TRANSPARENT
+        v < 10f -> Color.argb(150,  0,160,  0)
+        v < 30f -> Color.argb(200,  0,200,  0)
+        v < 50f -> Color.argb(210,200,200,  0)
+        v < 80f -> Color.argb(230,200,  0,  0)
+        else    -> Color.argb(255,200,  0,200)
+    }
+
+    private fun drawSweep(canvas: Canvas, cx: Float, ownY: Float, radius: Float, rotDeg: Float, sweepAngle: Float) {
+        val shader = SweepGradient(cx, ownY,
+            intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT, Color.argb(70,0,200,60)),
+            floatArrayOf(0f, 0.85f, 1f))
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; this.shader = shader }
+        canvas.save()
+        canvas.translate(cx, ownY); canvas.rotate(rotDeg + sweepAngle - 90f); canvas.translate(-cx, -ownY)
+        canvas.drawCircle(cx, ownY, radius, p)
+        canvas.restore()
+    }
+
+    private fun drawArcMask(canvas: Canvas, cx: Float, ownY: Float, radius: Float, w: Float, h: Float) {
+        val p = Paint().apply { color = Color.BLACK }
+        val path = Path()
+        path.addRect(0f, 0f, w, h, Path.Direction.CW)
+        path.moveTo(cx, ownY)
+        path.arcTo(RectF(cx-radius-1,ownY-radius-1,cx+radius+1,ownY+radius+1), -150f+120f, 360f-120f)
+        path.close()
+        path.fillType = Path.FillType.EVEN_ODD
+        canvas.drawPath(path, p)
+    }
+
+    private fun drawRings(canvas: Canvas, cx: Float, ownY: Float, radius: Float, cfg: NdSettings, side: Float) {
+        val rings = if (cfg.mode == NdMode.ARC) 2 else 4
+        val isArc = cfg.mode == NdMode.ARC
+        labelPaint.textSize = (side * 0.025f).coerceAtLeast(9f)
+        for (i in 1..rings) {
+            val r  = radius * i / rings
+            val nm = cfg.rangeNm * i / rings
+            if (isArc) {
+                canvas.drawArc(RectF(cx-r,ownY-r,cx+r,ownY+r), -150f, 120f, false, ringPaint)
+            } else {
+                canvas.drawCircle(cx, ownY, r, ringPaint)
+            }
+            val la = if (isArc) Math.toRadians(-150.0 + 15.0) else Math.toRadians(-90.0 + 7.0)
+            canvas.drawText("$nm", cx + cos(la).toFloat()*r + 5f, ownY + sin(la).toFloat()*r - 3f, labelPaint)
+        }
+    }
+
+    private fun drawCompass(canvas: Canvas, cx: Float, ownY: Float, radius: Float,
+                            rotDeg: Float, cfg: NdSettings, own: OwnshipState, side: Float) {
+        val isArc = cfg.mode == NdMode.ARC
+        val fs = (side * 0.028f).coerceAtLeast(9f)
+        compassTxt.textSize = fs
+        val rotRad = Math.toRadians(rotDeg.toDouble())
+        for (a in 0 until 360 step 10) {
+            val isMaj = a % 30 == 0
+            if (isArc) {
+                var rel = (a - own.headingDeg).toDouble()
+                while (rel >  180) rel -= 360; while (rel < -180) rel += 360
+                if (abs(rel) > 68) continue
+            }
+            val ang = Math.toRadians(a.toDouble()) + rotRad - Math.PI / 2
+            val c = cos(ang).toFloat(); val s = sin(ang).toFloat()
+            val len = if (isMaj) 14f else 7f
+            canvas.drawLine(cx+c*(radius-len),ownY+s*(radius-len),cx+c*radius,ownY+s*radius, if(isMaj) compassMaj else compassMin)
+            if (isMaj) {
+                val label = when(a){0->"N";90->"E";180->"S";270->"W"; else->(a/10).toString().padStart(2,'0')}
+                val lr = radius - 24f
+                canvas.save()
+                canvas.translate(cx+c*lr, ownY+s*lr)
+                canvas.rotate(Math.toDegrees(ang).toFloat()+90f)
+                compassTxt.isFakeBoldText = listOf("N","E","S","W").contains(label)
+                canvas.drawText(label, 0f, fs*0.4f, compassTxt)
+                canvas.restore()
+            }
+        }
+    }
+
+    private fun drawOwnship(canvas: Canvas, cx: Float, ownY: Float, radius: Float,
+                            cfg: NdSettings, own: OwnshipState, side: Float) {
+        val s    = (side * 0.036f).coerceAtLeast(12f)
+        val isArc = cfg.mode == NdMode.ARC
+        val hdgLen = if (isArc) radius * 0.94f else radius * 0.90f
+
+        // ヘディングライン
+        canvas.drawLine(cx, ownY, cx, ownY - hdgLen, hdgLinePaint)
+        val tri = Path().apply {
+            moveTo(cx, ownY-hdgLen); lineTo(cx-5f, ownY-hdgLen+10f); lineTo(cx+5f, ownY-hdgLen+10f); close()
+        }
+        canvas.drawPath(tri, Paint(Paint.ANTI_ALIAS_FLAG).apply{ color=Color.YELLOW; style=Paint.Style.FILL })
+
+        // グラウンドトラック
+        val trkAng = if (cfg.orient == NdOrient.HEADING_UP) -Math.PI.toFloat()/2f
+                     else (own.headingDeg * Math.PI.toFloat()/180f) - Math.PI.toFloat()/2f
+        val vec = (radius*0.28f).coerceAtMost(own.speedKmh*0.3f + 10f)
+        canvas.drawLine(cx, ownY, cx+cos(trkAng)*(vec+s), ownY+sin(trkAng)*(vec+s), trackPaint)
+
+        // 機体
+        ownPaint.strokeWidth = (side*0.003f).coerceAtLeast(1.5f)
+        canvas.save(); canvas.translate(cx, ownY)
+        canvas.drawLine(0f,-s,0f,s*0.7f,ownPaint)
+        canvas.drawLine(-s*1.1f,s*0.15f,0f,-s*0.1f,ownPaint)
+        canvas.drawLine( s*1.1f,s*0.15f,0f,-s*0.1f,ownPaint)
+        canvas.drawLine(-s*0.45f,s*0.55f,0f,s*0.3f,ownPaint)
+        canvas.drawLine( s*0.45f,s*0.55f,0f,s*0.3f,ownPaint)
+        canvas.drawCircle(0f,0f,3.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.WHITE;style=Paint.Style.FILL})
+        canvas.restore()
     }
 }
