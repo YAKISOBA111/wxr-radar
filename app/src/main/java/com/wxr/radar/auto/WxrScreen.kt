@@ -28,6 +28,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.wxr.radar.data.FetchResult
 import com.wxr.radar.data.HeadingSource
 import com.wxr.radar.data.JmaRepository
 import com.wxr.radar.data.NdMode
