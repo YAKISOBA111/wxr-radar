@@ -78,6 +78,24 @@ class MainActivity : AppCompatActivity() {
             btnTerr.setOnClickListener { vm.toggleTerr(); updateLayerButton(btnTerr, vm.settings.value?.terrOn == true) }
             btnArpt.setOnClickListener { vm.toggleArpt(); updateLayerButton(btnArpt, vm.settings.value?.arptOn == true) }
 
+            // 縦画面ボタン (bottomPanel内の重複ボタン)
+            btnArcPortrait.setOnClickListener  { vm.setMode(NdMode.ARC);  updateModeButtons(NdMode.ARC) }
+            btnRosePortrait.setOnClickListener { vm.setMode(NdMode.ROSE); updateModeButtons(NdMode.ROSE) }
+            btnHupPortrait.setOnClickListener  { vm.setOrient(NdOrient.HEADING_UP); updateOrientButtons(NdOrient.HEADING_UP) }
+            btnNupPortrait.setOnClickListener  { vm.setOrient(NdOrient.NORTH_UP);   updateOrientButtons(NdOrient.NORTH_UP) }
+            btnRangeDownP.setOnClickListener   {
+                val steps = listOf(10, 20, 40, 80, 160, 320)
+                val cur   = vm.settings.value?.rangeNm ?: 80
+                val prev  = steps.lastOrNull { it < cur } ?: steps.first()
+                vm.setRange(prev)
+            }
+            btnRangeUpP.setOnClickListener     {
+                val steps = listOf(10, 20, 40, 80, 160, 320)
+                val cur   = vm.settings.value?.rangeNm ?: 80
+                val next  = steps.firstOrNull { it > cur } ?: steps.last()
+                vm.setRange(next)
+            }
+
             // 初期状態
             updateModeButtons(NdMode.ARC)
             updateOrientButtons(NdOrient.HEADING_UP)

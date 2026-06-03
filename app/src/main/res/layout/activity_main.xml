@@ -187,11 +187,9 @@
                 android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
                 <Button android:id="@+id/btnArcPortrait"
                     style="@style/NdButtonSmall" android:text="ARC"
-                    android:layout_marginEnd="3dp"
-                    android:onClick="onArcClick"/>
+                    android:layout_marginEnd="3dp"/>
                 <Button android:id="@+id/btnRosePortrait"
-                    style="@style/NdButtonSmall" android:text="ROSE"
-                    android:onClick="onRoseClick"/>
+                    style="@style/NdButtonSmall" android:text="ROSE"/>
             </LinearLayout>
 
             <View android:layout_width="1dp" android:layout_height="20dp" android:background="#222222"/>
@@ -201,11 +199,9 @@
                 android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
                 <Button android:id="@+id/btnHupPortrait"
                     style="@style/NdButtonSmall" android:text="H-UP"
-                    android:layout_marginEnd="3dp"
-                    android:onClick="onHupClick"/>
+                    android:layout_marginEnd="3dp"/>
                 <Button android:id="@+id/btnNupPortrait"
-                    style="@style/NdButtonSmall" android:text="N-UP"
-                    android:onClick="onNupClick"/>
+                    style="@style/NdButtonSmall" android:text="N-UP"/>
             </LinearLayout>
 
             <View android:layout_width="1dp" android:layout_height="20dp" android:background="#222222"/>
@@ -215,11 +211,9 @@
                 android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
                 <Button android:id="@+id/btnRangeDownP"
                     style="@style/NdButtonSmall" android:text="RNG▼"
-                    android:layout_marginEnd="3dp"
-                    android:onClick="onRngDownClick"/>
+                    android:layout_marginEnd="3dp"/>
                 <Button android:id="@+id/btnRangeUpP"
-                    style="@style/NdButtonSmall" android:text="RNG▲"
-                    android:onClick="onRngUpClick"/>
+                    style="@style/NdButtonSmall" android:text="RNG▲"/>
             </LinearLayout>
 
         </LinearLayout>
