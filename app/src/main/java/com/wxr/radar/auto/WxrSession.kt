@@ -1,2 +1,2 @@
 package com.wxr.radar.auto
-// WxrSession は WxrScreen.kt に統合済み
+// WxrSession - disabled pending car-app dependency fix

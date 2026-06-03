@@ -27,6 +27,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- AUTO SERVICE DISABLED FOR INITIAL BUILD
 
         <!-- ══ Android Auto CarAppService ══ -->
         <service
@@ -42,11 +43,14 @@
                 android:name="androidx.car.app.minCarApiLevel"
                 android:value="3" />
         </service>
+        -->
+        <!-- AUTOMOTIVE META DISABLED
 
         <!-- Automotive OS用のアプリ説明ファイル -->
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+        -->
 
     </application>
 </manifest>

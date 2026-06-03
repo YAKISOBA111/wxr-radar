@@ -31,7 +31,6 @@ android {
 
     buildFeatures {
         viewBinding = true
-        dataBinding = true
     }
 }
 
@@ -47,7 +46,7 @@ dependencies {
     implementation(libs.gson)
 
     // Android Auto / Automotive
-    implementation(libs.car.app)
+    // implementation(libs.car.app)  // TODO: re-enable after basic build passes
     // Automotive OS (実機ビルド時のみ有効)
     // implementation(libs.car.app.automotive)
 }
