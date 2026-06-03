@@ -79,6 +79,12 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
 
     init {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(surfaceCallback)
+        // Screen破棄時にコルーチンをキャンセル
+        lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onDestroy(owner: androidx.lifecycle.LifecycleOwner) {
+                scope.cancel()
+            }
+        })
     }
 
     override fun onGetTemplate(): Template {
@@ -134,11 +140,6 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
             NDDrawer.draw(canvas, radar, ownship, settings, sweepAngle)
             surface.unlockCanvasAndPost(canvas)
         } catch (_: Exception) {}
-    }
-
-    override fun onDestroy() {
-        scope.cancel()
-        super.onDestroy()
     }
 }
 
@@ -233,13 +234,14 @@ object NDDrawer {
                         cx: Float, ownY: Float, radius: Float, rotDeg: Float) {
         val g        = radar.gridSize
         val pxPerKm  = radius / cfg.rangeKm.toFloat()
-        val kmPerDeg = 111f
+        val kmPerDeg = 111.0
+        val cosLat   = cos(Math.toRadians(own.lat))
         val b        = radar.bounds
         val latSpan  = ((b.latMax - b.latMin) * kmPerDeg).toFloat()
-        val lonSpan  = ((b.lonMax - b.lonMin) * kmPerDeg * cos(Math.toRadians(own.lat)).toFloat())
+        val lonSpan  = ((b.lonMax - b.lonMin) * kmPerDeg * cosLat).toFloat()
         val dw = lonSpan * pxPerKm
         val dh = latSpan * pxPerKm
-        val ox = ((own.lon - b.lonMin) * kmPerDeg * cos(Math.toRadians(own.lat))).toFloat() * pxPerKm
+        val ox = ((own.lon - b.lonMin) * kmPerDeg * cosLat).toFloat() * pxPerKm
         val oy = ((b.latMax - own.lat) * kmPerDeg).toFloat() * pxPerKm
 
         canvas.save()
