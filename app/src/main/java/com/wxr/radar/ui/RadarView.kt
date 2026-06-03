@@ -25,10 +25,19 @@ class RadarView @JvmOverloads constructor(
     private var ownship:   OwnshipState = OwnshipState()
     private var settings:  NdSettings   = NdSettings()
 
+    /** 表示用の平滑化ヘディング（プルプル防止）。実際の回転描画はこの値を使う */
+    private var displayHeading = 0f
+    private var headingInitialized = false
+
     fun update(radar: RadarData?, own: OwnshipState, cfg: NdSettings) {
         radarData = radar
         ownship   = own
         settings  = cfg
+        // 初回は即座に同期（最初だけアニメさせない）
+        if (!headingInitialized) {
+            displayHeading = own.headingDeg
+            headingInitialized = true
+        }
         invalidate()
     }
 
@@ -38,14 +47,35 @@ class RadarView @JvmOverloads constructor(
     private var sweepAngle = 0f
 
     init {
-        // 約 30fps でスイープ回転
+        // 約 30fps でスイープ回転＋ヘディング平滑化
         post(object : Runnable {
             override fun run() {
                 sweepAngle = (sweepAngle + 1.2f) % 360f
+                smoothHeading()
                 invalidate()
                 postDelayed(this, 33)
             }
         })
+    }
+
+    /**
+     * 目標ヘディングへ滑らかに追従させる（ローパス補間）。
+     * 0°↔360°境界をまたぐ最短方向で補間し、微小なノイズは無視する。
+     */
+    private fun smoothHeading() {
+        val target = ownship.headingDeg
+        // 最短回転方向の差分（-180..180）
+        var diff = target - displayHeading
+        while (diff > 180f) diff -= 360f
+        while (diff < -180f) diff += 360f
+
+        // デッドバンド: 0.5°未満の揺れは無視してプルプルを抑える
+        if (abs(diff) < 0.5f) return
+
+        // 補間係数 0.12 = 緩やかに追従（大きいほど機敏、小さいほど滑らか）
+        displayHeading += diff * 0.12f
+        // 0..360 に正規化
+        displayHeading = ((displayHeading % 360f) + 360f) % 360f
     }
 
     // ──────────────────────────────────────────
@@ -126,8 +156,8 @@ class RadarView @JvmOverloads constructor(
         // 背景
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-        // H-UP: 地図・レーダーを-heading分回転させる
-        val rotDeg  = if (settings.orient == NdOrient.HEADING_UP) -ownship.headingDeg else 0f
+        // H-UP: 地図・レーダーを-heading分回転させる（平滑化値を使用）
+        val rotDeg  = if (settings.orient == NdOrient.HEADING_UP) -displayHeading else 0f
         val rotRad  = Math.toRadians(rotDeg.toDouble()).toFloat()
 
         // ── クリップ ──
@@ -292,7 +322,6 @@ class RadarView @JvmOverloads constructor(
 
         for (i in 1..rings) {
             val r  = radius * i / rings
-            val nm = (settings.rangeNm * i / rings)
 
             if (isArc) {
                 val oval = RectF(cx-r, ownY-r, cx+r, ownY+r)
@@ -301,11 +330,16 @@ class RadarView @JvmOverloads constructor(
                 canvas.drawCircle(cx, ownY, r, ringPaint)
             }
 
-            // 距離ラベル
+            // 距離ラベル（現在の単位。最外周のみ単位記号を付与）
+            val label = if (i == rings) {
+                "${settings.ringLabel(i, rings)}${settings.distanceUnit.label}"
+            } else {
+                settings.ringLabel(i, rings)
+            }
             val labelAng = if (isArc) -Math.PI/2 - Math.PI/4 else rotRad.toDouble() - Math.PI/2 + 0.12
             val lx = cx + cos(labelAng).toFloat() * r + 6f
             val ly = ownY + sin(labelAng).toFloat() * r - 3f
-            canvas.drawText("$nm", lx, ly, labelPaint)
+            canvas.drawText(label, lx, ly, labelPaint)
         }
     }
 
@@ -325,9 +359,9 @@ class RadarView @JvmOverloads constructor(
             val isMaj  = a % 30 == 0
             val isCard = a == 0 || a == 90 || a == 180 || a == 270
 
-            // ARCモード: 表示範囲±65°のみ
+            // ARCモード: 表示範囲±65°のみ（平滑化値で判定しチラつき防止）
             if (isArc) {
-                var rel = (a - ownship.headingDeg).toDouble()
+                var rel = (a - displayHeading).toDouble()
                 while (rel >  180) rel -= 360
                 while (rel < -180) rel += 360
                 if (abs(rel) > 68) continue
@@ -389,7 +423,7 @@ class RadarView @JvmOverloads constructor(
         val trkAng = if (settings.orient == NdOrient.HEADING_UP) {
             -Math.PI.toFloat() / 2f     // 常に上向き
         } else {
-            (ownship.headingDeg * Math.PI.toFloat() / 180f) - Math.PI.toFloat() / 2f
+            (displayHeading * Math.PI.toFloat() / 180f) - Math.PI.toFloat() / 2f
         }
         val vecLen = (radius * 0.28f).coerceAtMost(ownship.speedKmh * 0.3f + 10f)
         canvas.drawLine(

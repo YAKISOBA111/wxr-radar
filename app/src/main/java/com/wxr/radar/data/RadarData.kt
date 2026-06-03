@@ -40,10 +40,31 @@ data class NdSettings(
     val rangeNm: Int       = 80,
     val wxrOn: Boolean     = true,
     val terrOn: Boolean    = false,
-    val arptOn: Boolean    = false
+    val arptOn: Boolean    = false,
+    val distanceUnit: DistanceUnit = DistanceUnit.NM
 ) {
+    /** データ取得に使う実距離は常にkm */
     val rangeKm: Double get() = rangeNm * 1.852
+
+    /** 現在の単位でのレンジ値（整数） */
+    fun rangeInUnit(): Int = when (distanceUnit) {
+        DistanceUnit.NM -> rangeNm
+        DistanceUnit.KM -> Math.round(rangeNm * 1.852).toInt()
+    }
+
+    /** "80 NM" / "148 km" のような表示文字列 */
+    fun rangeLabel(): String = "${rangeInUnit()} ${distanceUnit.label}"
+
+    /** 距離リング i/total 段目のラベル（現在単位） */
+    fun ringLabel(i: Int, total: Int): String {
+        val v = when (distanceUnit) {
+            DistanceUnit.NM -> rangeNm * i / total
+            DistanceUnit.KM -> Math.round(rangeNm * 1.852 * i / total).toInt()
+        }
+        return v.toString()
+    }
 }
 
 enum class NdMode   { ARC, ROSE }
 enum class NdOrient { HEADING_UP, NORTH_UP }
+enum class DistanceUnit(val label: String) { NM("NM"), KM("km") }

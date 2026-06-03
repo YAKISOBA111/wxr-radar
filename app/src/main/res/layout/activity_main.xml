@@ -253,6 +253,9 @@
                 android:layout_marginEnd="5dp"/>
             <Button android:id="@+id/btnArpt"
                 style="@style/NdButtonSmall" android:text="ARPT"
+                android:layout_marginEnd="5dp"/>
+            <Button android:id="@+id/btnUnit"
+                style="@style/NdButtonSmall" android:text="NM"
                 android:layout_marginEnd="12dp"/>
 
             <!-- 凡例 -->

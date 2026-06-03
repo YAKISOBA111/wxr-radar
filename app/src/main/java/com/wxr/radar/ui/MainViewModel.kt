@@ -85,6 +85,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleTerr() { _settings.value = _settings.value?.let { it.copy(terrOn = !it.terrOn) } }
     fun toggleArpt() { _settings.value = _settings.value?.let { it.copy(arptOn = !it.arptOn) } }
 
+    /** 距離単位 NM ↔ km を切り替える（再取得不要・表示のみ変更） */
+    fun toggleUnit() {
+        _settings.value = _settings.value?.let {
+            val next = if (it.distanceUnit == DistanceUnit.NM) DistanceUnit.KM else DistanceUnit.NM
+            it.copy(distanceUnit = next)
+        }
+    }
+
     // ──────────────────────────────────────────
     //  レーダーデータ取得
     // ──────────────────────────────────────────

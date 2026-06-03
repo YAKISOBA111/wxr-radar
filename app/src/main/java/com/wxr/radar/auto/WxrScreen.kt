@@ -99,13 +99,28 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
         }
     }
 
-    // スイープアニメーション
+    // スイープアニメーション＋ヘディング平滑化
+    private var displayHeading = 0f
+    private var headingInit = false
     private val sweepJob = scope.launch {
         while (isActive) {
             sweepAngle = (sweepAngle + 1.5f) % 360f
+            smoothHeading()
             renderToSurface()
             delay(33)
         }
+    }
+
+    /** 目標ヘディングへ滑らかに追従（プルプル防止） */
+    private fun smoothHeading() {
+        val target = ownship.headingDeg
+        if (!headingInit) { displayHeading = target; headingInit = true; return }
+        var diff = target - displayHeading
+        while (diff > 180f) diff -= 360f
+        while (diff < -180f) diff += 360f
+        if (abs(diff) < 0.5f) return
+        displayHeading += diff * 0.12f
+        displayHeading = ((displayHeading % 360f) + 360f) % 360f
     }
 
     private val surfaceCallback = object : SurfaceCallback {
@@ -209,7 +224,9 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
         val surface   = container.surface ?: return
         try {
             val canvas = surface.lockCanvas(null) ?: return
-            NDDrawer.draw(canvas, radar, ownship, settings, sweepAngle, statusText)
+            // 描画には平滑化済みヘディングを使う
+            val drawOwnship = ownship.copy(headingDeg = displayHeading)
+            NDDrawer.draw(canvas, radar, drawOwnship, settings, sweepAngle, statusText)
             surface.unlockCanvasAndPost(canvas)
         } catch (_: Exception) {}
     }
@@ -287,7 +304,7 @@ object NDDrawer {
         wxrLabel.textSize = fs
         infoP.textSize    = fs * 0.9f
         if (cfg.wxrOn) canvas.drawText("WXR", 12f, h - 12f, wxrLabel)
-        canvas.drawText("HDG ${own.headingDeg.toInt().toString().padStart(3,'0')}°  GS ${own.speedKmh.toInt()}km/h  RNG ${cfg.rangeNm}NM", 12f, 22f, infoP)
+        canvas.drawText("HDG ${own.headingDeg.toInt().toString().padStart(3,'0')}°  GS ${own.speedKmh.toInt()}km/h  RNG ${cfg.rangeLabel()}", 12f, 22f, infoP)
         // データ受信状態を右上に表示
         val statusP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = Typeface.MONOSPACE
@@ -384,14 +401,16 @@ object NDDrawer {
         labelPaint.textSize = (side * 0.025f).coerceAtLeast(9f)
         for (i in 1..rings) {
             val r  = radius * i / rings
-            val nm = cfg.rangeNm * i / rings
             if (isArc) {
                 canvas.drawArc(RectF(cx-r,ownY-r,cx+r,ownY+r), -150f, 120f, false, ringPaint)
             } else {
                 canvas.drawCircle(cx, ownY, r, ringPaint)
             }
+            val label = if (i == rings)
+                "${cfg.ringLabel(i, rings)}${cfg.distanceUnit.label}"
+            else cfg.ringLabel(i, rings)
             val la = if (isArc) Math.toRadians(-150.0 + 15.0) else Math.toRadians(-90.0 + 7.0)
-            canvas.drawText("$nm", cx + cos(la).toFloat()*r + 5f, ownY + sin(la).toFloat()*r - 3f, labelPaint)
+            canvas.drawText(label, cx + cos(la).toFloat()*r + 5f, ownY + sin(la).toFloat()*r - 3f, labelPaint)
         }
     }
 

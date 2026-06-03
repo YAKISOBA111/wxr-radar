@@ -77,6 +77,7 @@ class MainActivity : AppCompatActivity() {
             btnWxr.setOnClickListener  { vm.toggleWxr();  updateLayerButton(btnWxr,  vm.settings.value?.wxrOn  == true) }
             btnTerr.setOnClickListener { vm.toggleTerr(); updateLayerButton(btnTerr, vm.settings.value?.terrOn == true) }
             btnArpt.setOnClickListener { vm.toggleArpt(); updateLayerButton(btnArpt, vm.settings.value?.arptOn == true) }
+            btnUnit.setOnClickListener { vm.toggleUnit() }
 
             // 縦画面ボタン (bottomPanel内の重複ボタン)
             btnArcPortrait.setOnClickListener  { vm.setMode(NdMode.ARC);  updateModeButtons(NdMode.ARC) }
@@ -132,7 +133,8 @@ class MainActivity : AppCompatActivity() {
         }
         vm.settings.observe(this) { s ->
             refresh()
-            binding.tvRange.text = "${s.rangeNm} NM"
+            binding.tvRange.text = s.rangeLabel()
+            binding.btnUnit.text = s.distanceUnit.label
         }
         vm.fetchState.observe(this) { state ->
             when (state) {
