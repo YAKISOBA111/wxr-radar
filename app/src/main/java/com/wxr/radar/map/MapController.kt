@@ -1,6 +1,8 @@
 package com.wxr.radar.map
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.wxr.radar.data.NdMode
 import com.wxr.radar.data.NdOrient
 import com.wxr.radar.data.NdSettings
@@ -11,10 +13,12 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.RasterLayer
 import org.maplibre.android.style.sources.RasterSource
 import org.maplibre.android.style.sources.TileSet
+import java.io.File
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.ln
@@ -25,9 +29,12 @@ import kotlin.math.min
  * 3層構成のうち下2層（道路基図 + JMA雨雲ラスター）と
  * ND計器に同期するカメラ（bearing / zoom / padding）を管理する。
  *
- * - 基図: assets/japan.pmtiles を pmtiles:// で参照するローカルベクタータイル。
- *         PMTiles が無い場合は背景色のみのフォールバックスタイルで起動する
- *         （受け入れ基準: オフラインで基図表示。雨雲・計器は基図無しでも動作）。
+ * - 基図: assets/japan.pmtiles を初回起動時に内部ストレージへコピーし、
+ *         pmtiles://file:// で参照する。
+ *         【重要】pmtiles://asset:// は使用不可。Android の AssetFileSource が
+ *         範囲読み込み(dataRange)を無視してファイル全体を返すため、PMTiles の
+ *         メタデータ解凍がネイティブ層で例外となりプロセスごとクラッシュする
+ *         (maplibre-native の実装制約。file:// は範囲読み込み対応で正常動作)。
  * - 雨雲: 気象庁ナウキャストの XYZ ラスタータイル。URL に basetime/validtime を
  *         含むため、更新の度にソース/レイヤーを作り直して差し替える。
  * - カメラ: 計器(NdOverlayView)と同一のジオメトリ計算(NdGeometry)を用い、
@@ -38,6 +45,8 @@ class MapController(private val context: Context) {
     companion object {
         private const val STYLE_ASSET   = "wxr_basemap_dark_style.json"
         private const val PMTILES_ASSET = "japan.pmtiles"
+        /** スタイルJSON内のプレースホルダURL（file:// の実パスに置換される） */
+        private const val PMTILES_STYLE_URL = "pmtiles://asset://japan.pmtiles"
 
         private const val RAIN_SOURCE_ID = "jma-rain-src"
         private const val RAIN_LAYER_ID  = "jma-rain-layer"
@@ -71,6 +80,8 @@ class MapController(private val context: Context) {
     private var pendingRain: Pair<String, String>? = null
     private var rainVisible = true
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     // moveCamera 抑制用の前回適用値
     private var lastBearing = Double.NaN
     private var lastZoom    = Double.NaN
@@ -94,30 +105,66 @@ class MapController(private val context: Context) {
                 isCompassEnabled     = false
             }
 
-            val builder = if (hasAsset(PMTILES_ASSET)) {
-                basemapAvailable = true
-                Style.Builder().fromUri("asset://$STYLE_ASSET")
-            } else {
-                // PMTiles 未同梱でも起動可能にする（開発時・初期ビルド用）
-                basemapAvailable = false
-                Style.Builder().fromJson(FALLBACK_STYLE_JSON)
-            }
-
-            m.setStyle(builder) { s ->
-                style = s
-                // スタイル確定前に届いていた雨雲更新を適用
-                pendingRain?.let { (b, v) -> updateRain(b, v) }
-                pendingRain = null
-                onReady?.invoke()
-            }
+            // PMTiles の filesDir へのコピー(初回のみ ~29MB)があるためワーカーで準備
+            Thread({
+                val builder = buildStyle()
+                mainHandler.post {
+                    m.setStyle(builder) { s ->
+                        style = s
+                        // スタイル確定前に届いていた雨雲更新を適用
+                        pendingRain?.let { (b, v) -> updateRain(b, v) }
+                        pendingRain = null
+                        onReady?.invoke()
+                    }
+                }
+            }, "BasemapPrep").start()
         }
     }
 
-    private fun hasAsset(name: String): Boolean = try {
-        context.assets.open(name).use { }
-        true
-    } catch (_: Exception) {
-        false
+    /** 基図スタイルを構築。PMTiles 不在・コピー失敗時はフォールバック */
+    private fun buildStyle(): Style.Builder = try {
+        val pmtiles = ensurePmtilesOnDisk()
+        if (pmtiles != null) {
+            val json = context.assets.open(STYLE_ASSET)
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+                .replace(PMTILES_STYLE_URL, "pmtiles://file://${pmtiles.absolutePath}")
+            basemapAvailable = true
+            Style.Builder().fromJson(json)
+        } else {
+            basemapAvailable = false
+            Style.Builder().fromJson(FALLBACK_STYLE_JSON)
+        }
+    } catch (e: Exception) {
+        basemapAvailable = false
+        Style.Builder().fromJson(FALLBACK_STYLE_JSON)
+    }
+
+    /**
+     * assets の PMTiles を内部ストレージへコピーして File を返す。
+     * 未同梱なら null。既にコピー済み（同サイズ）ならコピーを省略。
+     */
+    private fun ensurePmtilesOnDisk(): File? {
+        val assetLength = try {
+            // noCompress 指定済みのため openFd 可能。失敗時は -1 (毎回コピー判定不可→存在のみ確認)
+            context.assets.openFd(PMTILES_ASSET).use { it.length }
+        } catch (e: java.io.FileNotFoundException) {
+            return null
+        } catch (e: Exception) {
+            -1L
+        }
+
+        val dest = File(context.filesDir, PMTILES_ASSET)
+        val needCopy = !dest.exists() || (assetLength > 0 && dest.length() != assetLength)
+        if (needCopy) {
+            try {
+                context.assets.open(PMTILES_ASSET).use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output, 1 shl 16) }
+                }
+            } catch (e: Exception) {
+                return null
+            }
+        }
+        return if (dest.exists() && dest.length() > 0) dest else null
     }
 
     // ──────────────────────────────────────────
@@ -145,10 +192,7 @@ class MapController(private val context: Context) {
         val layer = RasterLayer(RAIN_LAYER_ID, RAIN_SOURCE_ID).withProperties(
             PropertyFactory.rasterOpacity(RAIN_OPACITY),
             PropertyFactory.rasterFadeDuration(0f),
-            PropertyFactory.visibility(
-                if (rainVisible) org.maplibre.android.style.layers.Property.VISIBLE
-                else org.maplibre.android.style.layers.Property.NONE
-            )
+            PropertyFactory.visibility(if (rainVisible) Property.VISIBLE else Property.NONE)
         )
         // addLayer は最上位に積む = 基図の上・計器オーバーレイ(View)の下
         s.addLayer(layer)
@@ -159,10 +203,7 @@ class MapController(private val context: Context) {
         rainVisible = visible
         val s = style ?: return
         s.getLayer(RAIN_LAYER_ID)?.setProperties(
-            PropertyFactory.visibility(
-                if (visible) org.maplibre.android.style.layers.Property.VISIBLE
-                else org.maplibre.android.style.layers.Property.NONE
-            )
+            PropertyFactory.visibility(if (visible) Property.VISIBLE else Property.NONE)
         )
     }
 
