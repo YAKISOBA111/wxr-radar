@@ -1,8 +1,10 @@
 package com.wxr.radar.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -50,6 +52,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         LocationServices.getFusedLocationProviderClient(app)
     private var lastGpsLocation: Location? = null
     private var lastGpsTime    = 0L
+    private var gpsCallback: LocationCallback? = null
+    private var sensorListener: SensorEventListener? = null
 
     // コンパスセンサー
     private val sensorManager = app.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -60,9 +64,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val magnetValues   = FloatArray(3)
 
     init {
-        startGps()
+        // 権限付与前に requestLocationUpdates を呼ぶと SecurityException で
+        // クラッシュするため、権限がある場合のみ開始する。
+        // 未付与時は MainActivity が権限取得後に startLocationUpdates() を呼ぶ。
+        startLocationUpdates()
         startSensor()
         startAutoFetch()
+    }
+
+    // ──────────────────────────────────────────
+    //  位置情報の開始制御
+    // ──────────────────────────────────────────
+    private var gpsStarted = false
+
+    private fun hasLocationPermission(): Boolean {
+        val app = getApplication<Application>()
+        return app.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED ||
+               app.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+    }
+
+    /** 権限がある場合のみ GPS 更新を開始（多重開始は無視）。権限取得後にも呼ぶこと */
+    fun startLocationUpdates() {
+        if (gpsStarted || !hasLocationPermission()) return
+        gpsStarted = true
+        startGps()
     }
 
     // ──────────────────────────────────────────
@@ -151,12 +178,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     //  GPS
     // ──────────────────────────────────────────
     @SuppressLint("MissingPermission")
-    private fun startGps() {
+    private fun startGps() = try {
         val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
             .setMinUpdateIntervalMillis(1000L)
             .build()
 
-        fusedClient.requestLocationUpdates(req, object : LocationCallback() {
+        val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
                 lastGpsLocation = loc
@@ -183,7 +210,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 )
             }
-        }, android.os.Looper.getMainLooper())
+        }
+        gpsCallback = callback
+        fusedClient.requestLocationUpdates(req, callback, android.os.Looper.getMainLooper())
+        Unit
+    } catch (e: SecurityException) {
+        // 競合等で権限が剥奪されていた場合の保険（クラッシュさせない）
+        gpsStarted = false
     }
 
     // ──────────────────────────────────────────
@@ -218,6 +251,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
 
+        sensorListener = listener
         sensorManager.registerListener(listener,
             sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
             SensorManager.SENSOR_DELAY_UI)
@@ -229,8 +263,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ──────────────────────────────────────────
     override fun onCleared() {
         super.onCleared()
-        fusedClient.removeLocationUpdates(object : LocationCallback() {})
-        sensorManager.unregisterListener(null as? SensorEventListener)
+        gpsCallback?.let { fusedClient.removeLocationUpdates(it) }
+        sensorListener?.let { sensorManager.unregisterListener(it) }
         autoFetchJob?.cancel()
         fetchJob?.cancel()
     }

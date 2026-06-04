@@ -24,7 +24,9 @@ class MainActivity : AppCompatActivity() {
     private val locationPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        if (results[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+        if (results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            results[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
+            vm.startLocationUpdates()   // 権限取得後に GPS 開始
             vm.triggerFetch()
         } else {
             Toast.makeText(this, "位置情報の権限が必要です", Toast.LENGTH_LONG).show()
@@ -237,6 +239,7 @@ class MainActivity : AppCompatActivity() {
         val fine   = Manifest.permission.ACCESS_FINE_LOCATION
         val coarse = Manifest.permission.ACCESS_COARSE_LOCATION
         if (ContextCompat.checkSelfPermission(this, fine) == PackageManager.PERMISSION_GRANTED) {
+            vm.startLocationUpdates()
             vm.triggerFetch()
         } else {
             locationPermLauncher.launch(arrayOf(fine, coarse))
