@@ -15,3 +15,8 @@ captures/
 # Gradle
 !gradle/wrapper/gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.properties
+
+# PMTiles 生成ツール・中間生成物 (tools内はコミットしない。assets同梱分のみ管理)
+tools/planetiler.jar
+tools/*.pmtiles
+tools/data/
