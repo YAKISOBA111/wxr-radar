@@ -66,7 +66,7 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
 
     private var radar: RadarData?   = null
     private var ownship = OwnshipState()
-    private var settings = NdSettings(mode = NdMode.ARC, orient = NdOrient.HEADING_UP, rangeNm = 80)
+    private var settings = NdSettings(mode = NdMode.ARC, orient = NdOrient.HEADING_UP)
 
     private var surfaceContainer: SurfaceContainer? = null
     private var sweepAngle = 0f
@@ -80,9 +80,11 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
         override fun onLocationResult(result: LocationResult) {
             val loc = result.lastLocation ?: return
             val speedKmh = (loc.speed * 3.6f).coerceAtLeast(0f)
-            // GPS速度>3km/h かつ bearing有効ならGPS方位、それ以外は前回方位を維持
-            val heading = if (speedKmh > 3f && loc.hasBearing()) loc.bearing else ownship.headingDeg
-            val source  = if (speedKmh > 3f && loc.hasBearing()) HeadingSource.GPS else ownship.headingSource
+            // GPS速度>=5km/h かつ bearing有効ならGPS方位を採用。
+            // 低速・停車時は直前の方位で凍結（180°反転・プルプル対策）
+            val moving  = speedKmh >= 5f && loc.hasBearing()
+            val heading = if (moving) loc.bearing else ownship.headingDeg
+            val source  = if (moving) HeadingSource.GPS else ownship.headingSource
             ownship = ownship.copy(
                 lat = loc.latitude,
                 lon = loc.longitude,
@@ -118,8 +120,8 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
         var diff = target - displayHeading
         while (diff > 180f) diff -= 360f
         while (diff < -180f) diff += 360f
-        if (abs(diff) < 0.5f) return
-        displayHeading += diff * 0.12f
+        if (abs(diff) < 1.0f) return   // デッドバンド ~1°
+        displayHeading += diff * 0.08f   // ローパス係数 ~0.08
         displayHeading = ((displayHeading % 360f) + 360f) % 360f
     }
 
@@ -174,14 +176,14 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
                         invalidate()
                     }.build())
                     .addAction(Action.Builder().setTitle("RNG+").setOnClickListener {
-                        val steps = listOf(10,20,40,80,160,320)
-                        val i = steps.indexOf(settings.rangeNm)
-                        if (i < steps.size - 1) { settings = settings.copy(rangeNm = steps[i+1]); startFetch(); invalidate() }
+                        val steps = NdSettings.RANGE_STEPS_KM
+                        val i = steps.indexOf(settings.rangeKm)
+                        if (i in 0 until steps.size - 1) { settings = settings.copy(rangeKm = steps[i+1]); startFetch(); invalidate() }
                     }.build())
                     .addAction(Action.Builder().setTitle("RNG-").setOnClickListener {
-                        val steps = listOf(10,20,40,80,160,320)
-                        val i = steps.indexOf(settings.rangeNm)
-                        if (i > 0) { settings = settings.copy(rangeNm = steps[i-1]); startFetch(); invalidate() }
+                        val steps = NdSettings.RANGE_STEPS_KM
+                        val i = steps.indexOf(settings.rangeKm)
+                        if (i > 0) { settings = settings.copy(rangeKm = steps[i-1]); startFetch(); invalidate() }
                     }.build())
                     .build()
             )
@@ -197,7 +199,7 @@ class WxrScreen(carContext: CarContext) : Screen(carContext) {
         fetchJob?.cancel()
         fetchJob = scope.launch {
             while (isActive) {
-                when (val result = repo.fetch(ownship.lat, ownship.lon, settings.rangeKm)) {
+                when (val result = repo.fetch(ownship.lat, ownship.lon, settings.rangeKm.toDouble())) {
                     is FetchResult.Success -> {
                         radar = result.data
                         val t = result.basetime
