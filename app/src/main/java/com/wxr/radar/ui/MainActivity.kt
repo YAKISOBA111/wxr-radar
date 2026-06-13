@@ -4,11 +4,13 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.wxr.radar.data.HeadingSource
 import com.wxr.radar.data.NdMode
 import com.wxr.radar.data.NdOrient
 import com.wxr.radar.databinding.ActivityMainBinding
@@ -35,6 +37,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 【重要】走行中に画面が消えないこと（実車テスト最大の問題点）
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         // ステータスバー非表示 (没入モード)
         window.decorView.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -73,60 +79,23 @@ class MainActivity : AppCompatActivity() {
 
     // ──────────────────────────────────────────
     //  コントロールのセットアップ
+    //  (縦/横レイアウトで同一IDのボタングリッドを共用)
     // ──────────────────────────────────────────
-    private fun setupControls() {
-        with(binding) {
-            // MODE
-            btnArc.setOnClickListener  { vm.setMode(NdMode.ARC);  updateModeButtons(NdMode.ARC) }
-            btnRose.setOnClickListener { vm.setMode(NdMode.ROSE); updateModeButtons(NdMode.ROSE) }
+    private fun setupControls() = with(binding) {
+        btnMode.setOnClickListener   { vm.toggleMode() }
+        btnOrient.setOnClickListener { vm.toggleOrient() }
 
-            // ORIENT
-            btnHup.setOnClickListener { vm.setOrient(NdOrient.HEADING_UP); updateOrientButtons(NdOrient.HEADING_UP) }
-            btnNup.setOnClickListener { vm.setOrient(NdOrient.NORTH_UP);   updateOrientButtons(NdOrient.NORTH_UP) }
+        // 手動レンジ操作（AUTO は自動 OFF になる）
+        btnRangeUp.setOnClickListener   { vm.stepRange(+1) }
+        btnRangeDown.setOnClickListener { vm.stepRange(-1) }
 
-            // RANGE ▲▼
-            btnRangeUp.setOnClickListener {
-                val steps = listOf(10, 20, 40, 80, 160, 320)
-                val cur   = vm.settings.value?.rangeNm ?: 80
-                val next  = steps.firstOrNull { it > cur } ?: steps.last()
-                vm.setRange(next)
-            }
-            btnRangeDown.setOnClickListener {
-                val steps = listOf(10, 20, 40, 80, 160, 320)
-                val cur   = vm.settings.value?.rangeNm ?: 80
-                val prev  = steps.lastOrNull { it < cur } ?: steps.first()
-                vm.setRange(prev)
-            }
+        btnAuto.setOnClickListener { vm.toggleAutoRange() }
+        btnUnit.setOnClickListener { vm.toggleUnit() }
+        btnWxr.setOnClickListener  { vm.toggleWxr() }
 
-            // レイヤートグル
-            btnWxr.setOnClickListener  { vm.toggleWxr();  updateLayerButton(btnWxr,  vm.settings.value?.wxrOn  == true) }
-            btnTerr.setOnClickListener { vm.toggleTerr(); updateLayerButton(btnTerr, vm.settings.value?.terrOn == true) }
-            btnArpt.setOnClickListener { vm.toggleArpt(); updateLayerButton(btnArpt, vm.settings.value?.arptOn == true) }
-            btnUnit.setOnClickListener { vm.toggleUnit() }
-
-            // 縦画面ボタン (bottomPanel内の重複ボタン)
-            btnArcPortrait.setOnClickListener  { vm.setMode(NdMode.ARC);  updateModeButtons(NdMode.ARC) }
-            btnRosePortrait.setOnClickListener { vm.setMode(NdMode.ROSE); updateModeButtons(NdMode.ROSE) }
-            btnHupPortrait.setOnClickListener  { vm.setOrient(NdOrient.HEADING_UP); updateOrientButtons(NdOrient.HEADING_UP) }
-            btnNupPortrait.setOnClickListener  { vm.setOrient(NdOrient.NORTH_UP);   updateOrientButtons(NdOrient.NORTH_UP) }
-            btnRangeDownP.setOnClickListener   {
-                val steps = listOf(10, 20, 40, 80, 160, 320)
-                val cur   = vm.settings.value?.rangeNm ?: 80
-                val prev  = steps.lastOrNull { it < cur } ?: steps.first()
-                vm.setRange(prev)
-            }
-            btnRangeUpP.setOnClickListener     {
-                val steps = listOf(10, 20, 40, 80, 160, 320)
-                val cur   = vm.settings.value?.rangeNm ?: 80
-                val next  = steps.firstOrNull { it > cur } ?: steps.last()
-                vm.setRange(next)
-            }
-
-            // 初期状態
-            updateModeButtons(NdMode.ARC)
-            updateOrientButtons(NdOrient.HEADING_UP)
-            updateLayerButton(btnWxr, true)
-        }
+        // 警報バナー: 消音ボタンでもバナー自体のタップでも消音
+        btnAlertMute.setOnClickListener { vm.muteAlert() }
+        alertBanner.setOnClickListener  { vm.muteAlert() }
     }
 
     // ──────────────────────────────────────────
@@ -140,24 +109,29 @@ class MainActivity : AppCompatActivity() {
             binding.radarView.update(ownship, settings)
         }
 
-        vm.ownship.observe(this)   { own ->
+        vm.ownship.observe(this) { own ->
             refresh()
-            // ステータス表示更新
-            binding.tvHdg.text  = "${own.headingDeg.toInt().toString().padStart(3,'0')}°"
-            binding.tvGs.text   = "${own.speedKmh.toInt()} km/h"
-            binding.tvLat.text  = latStr(own.lat)
-            binding.tvLon.text  = lonStr(own.lon)
-            // ヘディングソースインジケーター
+            binding.tvHdg.text = "${own.headingDeg.toInt().toString().padStart(3,'0')}°"
+            binding.tvGs.text  = own.speedKmh.toInt().toString()
+            binding.tvLat.text = latStr(own.lat)
+            binding.tvLon.text = lonStr(own.lon)
+            // データソース (GPS / CMP) インジケーター（実車テストで好評・維持）
             binding.tvHdgSrc.text = when (own.headingSource) {
-                com.wxr.radar.data.HeadingSource.GPS       -> "GPS"
-                com.wxr.radar.data.HeadingSource.SENSOR    -> "CMP"
-                com.wxr.radar.data.HeadingSource.SIMULATED -> "SIM"
+                HeadingSource.GPS       -> "GPS"
+                HeadingSource.SENSOR    -> "CMP"
+                HeadingSource.SIMULATED -> "SIM"
             }
         }
         vm.settings.observe(this) { s ->
             refresh()
-            binding.tvRange.text = s.rangeLabel()
-            binding.btnUnit.text = s.distanceUnit.label
+            binding.tvRange.text   = s.rangeLabel()
+            binding.btnMode.text   = if (s.mode == NdMode.ARC) "ARC" else "ROSE"
+            binding.btnOrient.text = if (s.orient == NdOrient.HEADING_UP) "HDG UP" else "N UP"
+            binding.btnUnit.text   = s.distanceUnit.label
+            binding.btnMode.isSelected   = true
+            binding.btnOrient.isSelected = true
+            binding.btnAuto.isSelected   = s.autoRange
+            binding.btnWxr.isSelected    = s.wxrOn
             // WXR トグルを雨雲レイヤーの表示/非表示に連動
             mapController.setRainVisible(s.wxrOn)
         }
@@ -198,8 +172,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        vm.alertSevere.observe(this) { severe ->
-            binding.alertBanner.visibility = if (severe) View.VISIBLE else View.GONE
+        vm.alertActive.observe(this) { active ->
+            binding.alertBanner.visibility = if (active) View.VISIBLE else View.GONE
         }
     }
 
@@ -215,21 +189,6 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         binding.mapView.onSaveInstanceState(outState)
-    }
-
-    // ──────────────────────────────────────────
-    //  ボタン状態
-    // ──────────────────────────────────────────
-    private fun updateModeButtons(mode: NdMode) = with(binding) {
-        btnArc.isSelected  = mode == NdMode.ARC
-        btnRose.isSelected = mode == NdMode.ROSE
-    }
-    private fun updateOrientButtons(orient: NdOrient) = with(binding) {
-        btnHup.isSelected = orient == NdOrient.HEADING_UP
-        btnNup.isSelected = orient == NdOrient.NORTH_UP
-    }
-    private fun updateLayerButton(btn: android.widget.Button, on: Boolean) {
-        btn.isSelected = on
     }
 
     // ──────────────────────────────────────────
@@ -250,8 +209,8 @@ class MainActivity : AppCompatActivity() {
     //  表示フォーマット
     // ──────────────────────────────────────────
     private fun latStr(d: Double): String {
-        val deg = d.toInt().absoluteValue
-        val min = ((Math.abs(d) - Math.abs(d).toInt()) * 60).toInt()
+        val deg = Math.abs(d).toInt()
+        val min = ((Math.abs(d) - deg) * 60).toInt()
         return "${deg}°${min.toString().padStart(2,'0')}${if (d >= 0) "N" else "S"}"
     }
     private fun lonStr(d: Double): String {
@@ -259,5 +218,4 @@ class MainActivity : AppCompatActivity() {
         val min = ((Math.abs(d) - deg) * 60).toInt()
         return "${deg}°${min.toString().padStart(2,'0')}${if (d >= 0) "E" else "W"}"
     }
-    private val Int.absoluteValue get() = if (this < 0) -this else this
 }

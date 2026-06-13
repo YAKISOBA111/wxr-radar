@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  スマホ横画面: 左パネル + 中央レーダー（正方形・主役） + 右パネル。
+  縦画面は layout/activity_main.xml。ID構成は縦と完全に一致させること
+  （ViewBinding を非null で共用するため）。
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- ══ 左パネル: MODE/ORIENT + HDG/GS ══ -->
+    <LinearLayout
+        android:id="@+id/leftPanel"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="#0A0A0A"
+        android:padding="8dp"
+        android:gravity="top|center_horizontal"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintWidth_percent="0.20">
+
+        <TextView style="@style/NdCaption" android:text="MODE" android:layout_marginBottom="4dp"/>
+        <Button android:id="@+id/btnMode"
+            style="@style/NdButtonBig"
+            android:layout_width="match_parent"
+            android:text="ARC"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView style="@style/NdCaption" android:text="ORIENT" android:layout_marginBottom="4dp"/>
+        <Button android:id="@+id/btnOrient"
+            style="@style/NdButtonBig"
+            android:layout_width="match_parent"
+            android:text="HDG UP"
+            android:layout_marginBottom="12dp"/>
+
+        <TextView style="@style/NdCaption" android:text="HDG"/>
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
+            <TextView android:id="@+id/tvHdg"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="---°" android:textSize="20sp" android:textColor="#00CCFF"
+                android:fontFamily="monospace"/>
+            <TextView android:id="@+id/tvHdgSrc"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="---" android:textSize="11sp" android:textColor="#FFAA00"
+                android:fontFamily="monospace"/>
+        </LinearLayout>
+
+        <TextView style="@style/NdCaption" android:text="GS [km/h]"/>
+        <TextView android:id="@+id/tvGs"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="--" android:textSize="20sp" android:textColor="#FFFFFF"
+            android:fontFamily="monospace" android:layout_marginBottom="6dp"/>
+
+        <TextView style="@style/NdCaption" android:text="SRC"/>
+        <TextView android:id="@+id/tvSrc"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="---" android:textSize="11sp" android:textColor="#00CCFF"
+            android:fontFamily="monospace"/>
+    </LinearLayout>
+
+    <!-- ══ 地図 (背面: 道路基図 + 雨雲) ══ -->
+    <org.maplibre.android.maps.MapView
+        android:id="@+id/mapView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="@+id/radarView"
+        app:layout_constraintBottom_toBottomOf="@+id/radarView"
+        app:layout_constraintStart_toStartOf="@+id/radarView"
+        app:layout_constraintEnd_toEndOf="@+id/radarView" />
+
+    <!-- ══ ND計器オーバーレイ (中央・正方形・主役) ══ -->
+    <com.wxr.radar.ui.NdOverlayView
+        android:id="@+id/radarView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toEndOf="@id/leftPanel"
+        app:layout_constraintEnd_toStartOf="@+id/rightPanel"
+        app:layout_constraintDimensionRatio="1:1" />
+
+    <!-- ══ 右パネル: RANGE + 単位/WXR + 位置 ══ -->
+    <LinearLayout
+        android:id="@+id/rightPanel"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="#0A0A0A"
+        android:padding="8dp"
+        android:gravity="top|center_horizontal"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintWidth_percent="0.20">
+
+        <TextView style="@style/NdCaption" android:text="RANGE"/>
+        <TextView android:id="@+id/tvRange"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="10 km" android:textSize="20sp" android:textColor="#50EAFF"
+            android:fontFamily="monospace"
+            android:background="#101418"
+            android:paddingVertical="4dp"
+            android:layout_marginBottom="6dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="6dp">
+            <Button android:id="@+id/btnRangeDown"
+                style="@style/NdButtonBig"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="−"/>
+            <Button android:id="@+id/btnRangeUp"
+                style="@style/NdButtonBig"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:text="＋"/>
+        </LinearLayout>
+
+        <Button android:id="@+id/btnAuto"
+            style="@style/NdButtonBig"
+            android:layout_width="match_parent"
+            android:text="AUTO"
+            android:layout_marginBottom="12dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+            <Button android:id="@+id/btnUnit"
+                style="@style/NdButtonBig"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="km"/>
+            <Button android:id="@+id/btnWxr"
+                style="@style/NdButtonBig"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:text="WXR"/>
+        </LinearLayout>
+
+        <TextView style="@style/NdCaption" android:text="POS"/>
+        <TextView android:id="@+id/tvLat"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="--°--N" android:textSize="11sp" android:textColor="#00E000"
+            android:fontFamily="monospace"/>
+        <TextView android:id="@+id/tvLon"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="--°--E" android:textSize="11sp" android:textColor="#00E000"
+            android:fontFamily="monospace" android:layout_marginBottom="10dp"/>
+
+        <!-- 凡例 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <View android:layout_width="12dp" android:layout_height="8dp" android:background="#00C800"/>
+                <TextView style="@style/NdCaption" android:text="10+ " android:layout_marginEnd="6dp"/>
+                <View android:layout_width="12dp" android:layout_height="8dp" android:background="#C8C800"/>
+                <TextView style="@style/NdCaption" android:text="30+"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <View android:layout_width="12dp" android:layout_height="8dp" android:background="#C80000"/>
+                <TextView style="@style/NdCaption" android:text="50+ " android:layout_marginEnd="6dp"/>
+                <View android:layout_width="12dp" android:layout_height="8dp" android:background="#C800C8"/>
+                <TextView style="@style/NdCaption" android:text="80+"/>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ══ アラートバナー (最前面・タップでも消音) ══ -->
+    <LinearLayout
+        android:id="@+id/alertBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#CCFF0000"
+        android:paddingStart="16dp"
+        android:paddingEnd="4dp"
+        android:visibility="gone"
+        android:elevation="11dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⚠ WXR CAUTION 強雨接近"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:letterSpacing="0.1"
+            android:paddingVertical="10dp" />
+
+        <Button
+            android:id="@+id/btnAlertMute"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:minWidth="64dp"
+            android:layout_marginStart="12dp"
+            android:text="✕ 消音"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:background="#66000000" />
+    </LinearLayout>
+
+    <!-- ══ データ受信状態バナー ══ -->
+    <TextView
+        android:id="@+id/statusBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="● 受信待機"
+        android:textColor="#888888"
+        android:textSize="10sp"
+        android:fontFamily="monospace"
+        android:letterSpacing="0.05"
+        android:background="#CC000000"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="2dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="2dp"
+        android:elevation="10dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="@id/rightPanel" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
