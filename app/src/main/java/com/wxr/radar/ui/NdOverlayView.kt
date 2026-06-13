@@ -85,8 +85,8 @@ class NdOverlayView @JvmOverloads constructor(
         var diff = target - displayHeading
         while (diff > 180f) diff -= 360f
         while (diff < -180f) diff += 360f
-        if (abs(diff) < 0.5f) return
-        displayHeading += diff * 0.12f
+        if (abs(diff) < 1.0f) return   // デッドバンド ~1°（微小ノイズ無視）
+        displayHeading += diff * 0.08f   // ローパス係数 ~0.08
         displayHeading = ((displayHeading % 360f) + 360f) % 360f
     }
 
@@ -135,9 +135,10 @@ class NdOverlayView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
     private val labelPaint   = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color     = Color.argb(140, 0, 200, 220)
+        color     = Color.rgb(0, 220, 240)
         textAlign = Paint.Align.LEFT
-        typeface  = Typeface.MONOSPACE
+        typeface  = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        setShadowLayer(4f, 0f, 0f, Color.BLACK)
     }
     private val wxrLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color     = Color.rgb(0, 230, 0)
@@ -218,8 +219,7 @@ class NdOverlayView @JvmOverloads constructor(
     ) {
         val isArc  = settings.mode == NdMode.ARC
         val rings  = if (isArc) 2 else 4
-        val fs     = (side * 0.025f).coerceAtLeast(9f)
-        labelPaint.textSize = fs
+        val fs     = (side * 0.034f).coerceAtLeast(12f)
 
         for (i in 1..rings) {
             val r = radius * i / rings
@@ -231,15 +231,18 @@ class NdOverlayView @JvmOverloads constructor(
                 canvas.drawCircle(cx, ownY, r, ringPaint)
             }
 
-            // 距離ラベル（現在の単位。最外周のみ単位記号を付与）
-            val label = if (i == rings) {
-                "${settings.ringLabel(i, rings)}${settings.distanceUnit.label}"
+            // 距離ラベル（現在の単位。最外周は単位付き・大きめで強調）
+            val outermost = i == rings
+            val label = if (outermost) {
+                "${settings.ringLabel(i, rings)} ${settings.distanceUnit.label}"
             } else {
                 settings.ringLabel(i, rings)
             }
+            labelPaint.textSize = if (outermost) fs * 1.25f else fs
+            labelPaint.alpha    = if (outermost) 255 else 200
             val labelAng = if (isArc) -Math.PI / 2 - Math.PI / 4 else rotRad.toDouble() - Math.PI / 2 + 0.12
-            val lx = cx + cos(labelAng).toFloat() * r + 6f
-            val ly = ownY + sin(labelAng).toFloat() * r - 3f
+            val lx = cx + cos(labelAng).toFloat() * r + 8f
+            val ly = ownY + sin(labelAng).toFloat() * r - 4f
             canvas.drawText(label, lx, ly, labelPaint)
         }
     }
